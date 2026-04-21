@@ -450,6 +450,41 @@ textarea {
   font-size: 13px;
 }
 
+.stage-card {
+  grid-column: 1 / -1;
+}
+
+.stage-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stage-info-grid p {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #101010;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.stage-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stage-value {
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.stage-item-wide {
+  grid-column: 1 / -1;
+}
+
 .chart-wrap {
   margin-top: 8px;
   border: 1px solid var(--line);
@@ -577,5 +612,11 @@ textarea {
   }
   body {
     padding: 14px;
+  }
+  .stage-info-grid {
+    grid-template-columns: 1fr;
+  }
+  .stage-item-wide {
+    grid-column: auto;
   }
 }

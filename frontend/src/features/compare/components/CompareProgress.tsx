@@ -151,12 +151,26 @@ export function CompareProgress({
           )}
         </section>
 
-        <section className="status-card">
+        <section className="status-card stage-card">
           <h4>Stage</h4>
-          <p>Stage: {loadingStatus?.stage ?? "idle"}</p>
-          <p>Message: {loadingStatus?.message ?? "-"}</p>
-          <p>Ready: {loadingStatus?.ready ? "Y" : "N"}</p>
-          <p>Error: {loadingStatus?.error_reason ?? "-"}</p>
+          <div className="stage-info-grid">
+            <p>
+              <span className="stage-label">Stage</span>
+              <span className="stage-value">{loadingStatus?.stage ?? "idle"}</span>
+            </p>
+            <p>
+              <span className="stage-label">Ready</span>
+              <span className="stage-value">{loadingStatus?.ready ? "Y" : "N"}</span>
+            </p>
+            <p>
+              <span className="stage-label">Message</span>
+              <span className="stage-value">{loadingStatus?.message ?? "-"}</span>
+            </p>
+            <p className="stage-item-wide">
+              <span className="stage-label">Error</span>
+              <span className="stage-value">{loadingStatus?.error_reason ?? "-"}</span>
+            </p>
+          </div>
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={latencyHistory}>
