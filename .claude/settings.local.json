@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://127.0.0.1:8001/debug/inference)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)\\)\")",
+      "Bash(curl -s http://127.0.0.1:8001/debug/runtime)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,':',v\\) for k,v in d.get\\('scripts',{}\\).items\\(\\)]\")",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(taskkill //PID 24860 //F)",
+      "Bash(taskkill //PID 35332 //F)",
+      "Bash(nohup .venv/Scripts/python.exe -m uvicorn --app-dir backend app.main:app --host 0.0.0.0 --port 8001)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s http://127.0.0.1:8001/health)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('n_ctx:', d['llama_n_ctx'], '| gpu_layers:', d['llama_n_gpu_layers'], '| mmap:', d['llama_use_mmap'], '| summary:', d['summary']\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('singleton_init:', d['inference_singleton_initialized']\\); i=d.get\\('inference',{}\\); print\\('ready:', i.get\\('ready','N/A'\\)\\); print\\('summary:', i.get\\('summary', d.get\\('summary'\\)\\)\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(npm run *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); ls=d.get\\('inference',{}\\).get\\('loading_status'\\) or d.get\\('loading_status'\\); print\\(json.dumps\\({k:ls.get\\(k\\) for k in ['stage','message','elapsed_total_ms','elapsed_stage_ms']} if ls else d, indent=2, ensure_ascii=False\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:3000/)",
+      "Bash(powershell -NoProfile -Command \"Get-Process -Id 52192 -ErrorAction SilentlyContinue | Select-Object Id,Name,WS,VM,PM,CPU | Format-List\")",
+      "Bash(read pid *)",
+      "Bash(powershell -NoProfile -Command 'Get-Process -Id __TRACKED_VAR__ -ErrorAction SilentlyContinue | Select-Object Id,Name,@{N='\\\\''WS_MB'\\\\'';E={[math]::Round\\($_.WS/1MB,0\\)}},@{N='\\\\''VM_MB'\\\\'';E={[math]::Round\\($_.VM/1MB,0\\)}},@{N='\\\\''PM_MB'\\\\'';E={[math]::Round\\($_.PM/1MB,0\\)}} | Format-List')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); ls=d.get\\('inference',{}\\).get\\('loading_status'\\) or d.get\\('loading_status'\\); print\\(json.dumps\\(ls, indent=2, ensure_ascii=False\\) if ls else json.dumps\\(d,indent=2,ensure_ascii=False\\)\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import psutil; print\\(psutil.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pip install psutil)",
+      "Bash(python -c ' *)",
+      "Bash(.venv/Scripts/python.exe -m pip index versions llama-cpp-python)",
+      "Bash(.venv/Scripts/python.exe -m pip install --upgrade llama-cpp-python)",
+      "Bash(.venv/Scripts/python.exe -m pip install --upgrade llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu)",
+      "Bash(nvidia-smi --query-gpu=name,compute_cap,driver_version --format=csv)",
+      "Bash(nvcc --version)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' https://abetlen.github.io/llama-cpp-python/whl/__TRACKED_VAR__/)",
+      "Bash(curl -s \"https://abetlen.github.io/llama-cpp-python/whl/cu124/llama-cpp-python/\")",
+      "Bash(curl -s https://abetlen.github.io/llama-cpp-python/whl/__TRACKED_VAR__/llama-cpp-python/)",
+      "Bash(.venv/Scripts/python.exe -m pip install --force-reinstall --no-deps \"https://github.com/JamePeng/llama-cpp-python/releases/download/v0.3.36-cu130-Basic-win-20260417/llama_cpp_python-0.3.36+cu130.basic-cp311-cp311-win_amd64.whl\")",
+      "Bash(python -m json.tool)",
+      "Bash(awk -F\"'\" '{print $2}')",
+      "Bash(.venv/Scripts/python.exe -m pip install gguf -q)"
+    ]
+  }
+}

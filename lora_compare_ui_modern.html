@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoRA 비교 UI</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --bg-soft: #141414;
+      --panel: #171717;
+      --panel-2: #1d1d1d;
+      --line: rgba(255,255,255,0.08);
+      --line-strong: rgba(255,255,255,0.12);
+      --text: #f3f3f3;
+      --muted: #a3a3a3;
+      --muted-2: #7a7a7a;
+      --yellow: #f4c430;
+      --yellow-soft: rgba(244, 196, 48, 0.12);
+      --yellow-line: rgba(244, 196, 48, 0.28);
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+      --radius-xl: 26px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(244,196,48,0.05), transparent 22%),
+        linear-gradient(180deg, #0b0b0b 0%, #101010 100%);
+      min-height: 100vh;
+      padding: 28px;
+    }
+
+    .shell {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.015));
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: 32px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0));
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--bg-soft);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--yellow);
+      box-shadow: 0 0 10px rgba(244,196,48,0.5);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(30px, 5vw, 46px);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      font-weight: 800;
+    }
+
+    .headline-accent {
+      color: var(--yellow);
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+      max-width: 860px;
+    }
+
+    .section {
+      padding: 28px 32px 32px;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-left h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+    }
+
+    .toolbar-left p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .18s ease, opacity .18s ease, background .18s ease, border-color .18s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+
+    .btn-primary {
+      color: #111;
+      background: var(--yellow);
+      box-shadow: 0 10px 24px rgba(244,196,48,0.18);
+    }
+
+    .btn-secondary {
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    .accordion {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .accordion-item {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      overflow: hidden;
+      transition: border-color .22s ease, background .22s ease;
+    }
+
+    .accordion-item.is-open {
+      border-color: var(--yellow-line);
+      background: linear-gradient(180deg, rgba(244,196,48,0.03), rgba(255,255,255,0));
+    }
+
+    .accordion-trigger {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      text-align: left;
+      padding: 18px 20px;
+      cursor: pointer;
+    }
+
+    .accordion-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .accordion-icon-wrap {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #202020;
+      border: 1px solid var(--line);
+      color: var(--yellow);
+      flex-shrink: 0;
+    }
+
+    .accordion-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+
+    .accordion-desc {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .accordion-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .pill {
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: #1e1e1e;
+      border: 1px solid var(--line);
+      color: #e7e7e7;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .chevron {
+      width: 18px;
+      height: 18px;
+      transition: transform .28s ease;
+      opacity: .9;
+      color: var(--yellow);
+    }
+
+    .accordion-item.is-open .chevron {
+      transform: rotate(180deg);
+    }
+
+    .accordion-content {
+      height: 0;
+      overflow: hidden;
+      transition: height .28s ease;
+    }
+
+    .accordion-panel {
+      padding: 0 20px 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .field,
+    .range-card,
+    .output-card,
+    .summary-card {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .summary-card .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .summary-card .value {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .summary-card .desc {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .field.prompt { grid-column: span 12; }
+    .field.col-2 { grid-column: span 2; }
+    .field.col-3 { grid-column: span 3; }
+    .field.col-4 { grid-column: span 4; }
+    .field.col-6 { grid-column: span 6; }
+
+    label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .hint {
+      color: var(--muted-2);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    textarea,
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #121212;
+      color: var(--text);
+      border-radius: 14px;
+      outline: none;
+      padding: 14px 16px;
+      font-size: 15px;
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 140px;
+      line-height: 1.65;
+    }
+
+    textarea::placeholder,
+    input::placeholder {
+      color: #666;
+    }
+
+    textarea:focus,
+    input:focus {
+      border-color: var(--yellow-line);
+      box-shadow: 0 0 0 4px var(--yellow-soft);
+      transform: translateY(-1px);
+    }
+
+    .inline-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .chip {
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: #1a1a1a;
+      border: 1px solid var(--line);
+      color: #d5d5d5;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .advanced-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .range-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .range-value {
+      color: var(--yellow);
+      font-size: 12px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      background: rgba(244,196,48,0.08);
+      border: 1px solid var(--yellow-line);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--yellow);
+    }
+
+    .results {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .output-card {
+      min-height: 300px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .output-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .output-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      background: #1b1b1b;
+      color: #e8e8e8;
+    }
+
+    .stream-box {
+      background: #111;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      min-height: 220px;
+      padding: 18px;
+      color: #e6e6e6;
+      font-size: 14px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+
+    .stream-placeholder {
+      color: #8a8a8a;
+    }
+
+    .footer-note {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted-2);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .run-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .run-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 1100px) {
+      .summary-grid,
+      .advanced-grid,
+      .results {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .field.col-2,
+      .field.col-3,
+      .field.col-4,
+      .field.col-6 {
+        grid-column: span 6;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 18px; }
+      .hero, .section { padding-left: 18px; padding-right: 18px; }
+
+      .summary-grid,
+      .advanced-grid,
+      .results {
+        grid-template-columns: 1fr;
+      }
+
+      .field.prompt,
+      .field.col-2,
+      .field.col-3,
+      .field.col-4,
+      .field.col-6 {
+        grid-column: span 12;
+      }
+
+      .accordion-meta .pill {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card">
+      <div class="hero">
+        <div class="badge-row">
+          <span class="badge"><span class="badge-dot"></span> Base vs LoRA Compare</span>
+          <span class="badge">Streaming</span>
+          <span class="badge">Token-level Decode</span>
+        </div>
+
+        <h1>LoRA 비교를 위한<br><span class="headline-accent">심플 모던 대시보드</span></h1>
+        <p class="subtitle">
+          회색, 검은색, 노란색만 사용한 단색 기반 UI입니다.
+          시각적 자극을 줄이고 핵심 동작과 비교 결과에만 집중할 수 있도록 정리했습니다.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <h2>실험 컨트롤</h2>
+            <p>필요한 정보만 펼쳐서 보고, 나머지는 접어서 더 간결하게 관리합니다.</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary" id="expandAllBtn" type="button">모두 열기</button>
+            <button class="btn btn-secondary" id="collapseAllBtn" type="button">모두 닫기</button>
+            <button class="btn btn-primary" type="button">Base vs LoRA 비교 실행</button>
+          </div>
+        </div>
+
+        <div class="accordion" id="accordionRoot">
+          <div class="accordion-item is-open" data-accordion-item>
+            <button class="accordion-trigger" type="button" aria-expanded="true">
+              <div class="accordion-left">
+                <div class="accordion-icon-wrap">📊</div>
+                <div>
+                  <div class="accordion-title">실험 개요</div>
+                  <div class="accordion-desc">실행 방식과 핵심 비교 포인트를 한눈에 확인</div>
+                </div>
+              </div>
+              <div class="accordion-meta">
+                <span class="pill">요약 정보</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </button>
+            <div class="accordion-content">
+              <div class="accordion-panel">
+                <div class="summary-grid">
+                  <div class="summary-card">
+                    <div class="label">실행 방식</div>
+                    <div class="value">Base → LoRA</div>
+                    <div class="desc">항상 Base를 먼저 실행하고 이후 LoRA 결과를 비교합니다.</div>
+                  </div>
+                  <div class="summary-card">
+                    <div class="label">출력 방식</div>
+                    <div class="value">실시간 스트리밍</div>
+                    <div class="desc">토큰 단위 디코딩 결과를 아래 패널에 순차 표시합니다.</div>
+                  </div>
+                  <div class="summary-card">
+                    <div class="label">비교 포인트</div>
+                    <div class="value">스타일 / 일관성</div>
+                    <div class="desc">문체 변화, 포맷 안정성, 지시문 반영률 비교에 적합합니다.</div>
+                  </div>
+                  <div class="summary-card">
+                    <div class="label">추천 사용법</div>
+                    <div class="value">회귀 테스트</div>
+                    <div class="desc">고정 프롬프트로 Base와 Adapter 성능 차이를 반복 검증하세요.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item is-open" data-accordion-item>
+            <button class="accordion-trigger" type="button" aria-expanded="true">
+              <div class="accordion-left">
+                <div class="accordion-icon-wrap">✍️</div>
+                <div>
+                  <div class="accordion-title">기본 입력</div>
+                  <div class="accordion-desc">가장 자주 쓰는 Prompt와 핵심 파라미터</div>
+                </div>
+              </div>
+              <div class="accordion-meta">
+                <span class="pill">필수</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </button>
+            <div class="accordion-content">
+              <div class="accordion-panel">
+                <div class="grid">
+                  <div class="field prompt">
+                    <label for="prompt">
+                      <span>Prompt</span>
+                      <span class="hint">가장 중요한 입력</span>
+                    </label>
+                    <textarea id="prompt" placeholder="예: 다음 문장을 한국어로 전문적이고 자연스럽게 번역하고, JSON 형식으로만 출력하세요."></textarea>
+                    <div class="inline-meta">
+                      <span class="chip">System Prompt 결합 가능</span>
+                      <span class="chip">Few-shot 예시 대응</span>
+                      <span class="chip">회귀 테스트 추천</span>
+                    </div>
+                  </div>
+
+                  <div class="field col-2">
+                    <label for="seed"><span>Seed</span><span class="hint">재현성</span></label>
+                    <input id="seed" type="number" value="42" />
+                  </div>
+
+                  <div class="field col-2">
+                    <label for="topk"><span>Top-k</span><span class="hint">후보 수</span></label>
+                    <input id="topk" type="number" value="40" />
+                  </div>
+
+                  <div class="field col-2">
+                    <label for="topp"><span>Top-p</span><span class="hint">누적 확률</span></label>
+                    <input id="topp" type="text" value="0.9" />
+                  </div>
+
+                  <div class="field col-3">
+                    <label for="temperature"><span>Temperature</span><span class="hint">다양성</span></label>
+                    <input id="temperature" type="text" value="0.7" />
+                  </div>
+
+                  <div class="field col-3">
+                    <label for="maxTokens"><span>Max tokens</span><span class="hint">최대 출력</span></label>
+                    <input id="maxTokens" type="number" value="512" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item" data-accordion-item>
+            <button class="accordion-trigger" type="button" aria-expanded="false">
+              <div class="accordion-left">
+                <div class="accordion-icon-wrap">⚙️</div>
+                <div>
+                  <div class="accordion-title">고급 파라미터</div>
+                  <div class="accordion-desc">평소에는 접어두고, 필요할 때만 펼쳐서 조정</div>
+                </div>
+              </div>
+              <div class="accordion-meta">
+                <span class="pill">선택</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </button>
+            <div class="accordion-content">
+              <div class="accordion-panel">
+                <div class="advanced-grid">
+                  <div class="range-card">
+                    <div class="range-top">
+                      <span>Repetition Penalty</span>
+                      <span class="range-value">1.10</span>
+                    </div>
+                    <input type="range" min="1" max="2" step="0.01" value="1.10" />
+                  </div>
+
+                  <div class="range-card">
+                    <div class="range-top">
+                      <span>Presence Penalty</span>
+                      <span class="range-value">0.20</span>
+                    </div>
+                    <input type="range" min="0" max="2" step="0.01" value="0.20" />
+                  </div>
+
+                  <div class="range-card">
+                    <div class="range-top">
+                      <span>Frequency Penalty</span>
+                      <span class="range-value">0.15</span>
+                    </div>
+                    <input type="range" min="0" max="2" step="0.01" value="0.15" />
+                  </div>
+
+                  <div class="range-card">
+                    <div class="range-top">
+                      <span>Stop Sequence</span>
+                      <span class="range-value">Optional</span>
+                    </div>
+                    <input type="text" placeholder="예: </s> 또는 END" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item" data-accordion-item>
+            <button class="accordion-trigger" type="button" aria-expanded="false">
+              <div class="accordion-left">
+                <div class="accordion-icon-wrap">🚀</div>
+                <div>
+                  <div class="accordion-title">실행 상태</div>
+                  <div class="accordion-desc">현재 모드, 실행 순서, 스트리밍 옵션 확인</div>
+                </div>
+              </div>
+              <div class="accordion-meta">
+                <span class="pill">상태</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </button>
+            <div class="accordion-content">
+              <div class="accordion-panel">
+                <div class="run-bar">
+                  <div class="run-meta">
+                    <span class="chip">Mode: Serial Compare</span>
+                    <span class="chip">Order: Base → LoRA</span>
+                    <span class="chip">Stream: Enabled</span>
+                  </div>
+                  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn btn-secondary" type="button">프리셋 불러오기</button>
+                    <button class="btn btn-primary" type="button">비교 실행</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item is-open" data-accordion-item>
+            <button class="accordion-trigger" type="button" aria-expanded="true">
+              <div class="accordion-left">
+                <div class="accordion-icon-wrap">🧪</div>
+                <div>
+                  <div class="accordion-title">결과 비교</div>
+                  <div class="accordion-desc">Base와 LoRA 결과를 나란히 비교</div>
+                </div>
+              </div>
+              <div class="accordion-meta">
+                <span class="pill">비교 결과</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </button>
+            <div class="accordion-content">
+              <div class="accordion-panel">
+                <div class="results">
+                  <section class="output-card">
+                    <div class="output-head">
+                      <div class="output-title">Base Output</div>
+                      <div class="status"><span class="badge-dot"></span> Ready</div>
+                    </div>
+                    <div class="stream-box"><span class="stream-placeholder">Base 모델의 스트리밍 출력이 이 영역에 표시됩니다.
+
+예시:
+- 초안 생성
+- 포맷 유지 여부 확인
+- 지시문 준수율 비교</span></div>
+                    <div class="footer-note">
+                      <span>Model: Base</span>
+                      <span>Latency · Tokens/sec · Total tokens</span>
+                    </div>
+                  </section>
+
+                  <section class="output-card">
+                    <div class="output-head">
+                      <div class="output-title">LoRA Output</div>
+                      <div class="status"><span class="badge-dot"></span> Streaming</div>
+                    </div>
+                    <div class="stream-box"><span class="stream-placeholder">LoRA 적용 결과가 동일 파라미터 기준으로 표시됩니다.
+
+예시:
+- 스타일 편향 반영
+- 포맷 안정성 향상
+- 도메인 특화 표현 비교</span></div>
+                    <div class="footer-note">
+                      <span>Adapter: LoRA v1.2</span>
+                      <span>Diff View · Logprob · Sampling trace</span>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const accordionItems = document.querySelectorAll('[data-accordion-item]');
+    const STORAGE_KEY = 'lora_compare_accordion_state_v1';
+
+    function setAccordionState(item, open, save = true) {
+      const trigger = item.querySelector('.accordion-trigger');
+      const content = item.querySelector('.accordion-content');
+
+      if (open) {
+        item.classList.add('is-open');
+        trigger.setAttribute('aria-expanded', 'true');
+        content.style.height = content.scrollHeight + 'px';
+
+        const onOpenEnd = () => {
+          if (item.classList.contains('is-open')) content.style.height = 'auto';
+          content.removeEventListener('transitionend', onOpenEnd);
+        };
+        content.addEventListener('transitionend', onOpenEnd);
+      } else {
+        if (content.style.height === 'auto') {
+          content.style.height = content.scrollHeight + 'px';
+          requestAnimationFrame(() => { content.style.height = '0px'; });
+        } else {
+          content.style.height = content.scrollHeight + 'px';
+          requestAnimationFrame(() => { content.style.height = '0px'; });
+        }
+        item.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+
+      if (save) saveAccordionState();
+    }
+
+    function toggleAccordion(item) {
+      const isOpen = item.classList.contains('is-open');
+      setAccordionState(item, !isOpen);
+    }
+
+    function saveAccordionState() {
+      const state = Array.from(accordionItems).map(item => item.classList.contains('is-open'));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function restoreAccordionState() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        accordionItems.forEach(item => {
+          const content = item.querySelector('.accordion-content');
+          content.style.height = item.classList.contains('is-open') ? 'auto' : '0px';
+        });
+        return;
+      }
+
+      try {
+        const state = JSON.parse(saved);
+        accordionItems.forEach((item, index) => {
+          const open = !!state[index];
+          const trigger = item.querySelector('.accordion-trigger');
+          const content = item.querySelector('.accordion-content');
+          item.classList.toggle('is-open', open);
+          trigger.setAttribute('aria-expanded', String(open));
+          content.style.height = open ? 'auto' : '0px';
+        });
+      } catch (e) {
+        console.error('Accordion state restore failed', e);
+      }
+    }
+
+    accordionItems.forEach(item => {
+      const trigger = item.querySelector('.accordion-trigger');
+      trigger.addEventListener('click', () => toggleAccordion(item));
+    });
+
+    document.getElementById('expandAllBtn').addEventListener('click', () => {
+      accordionItems.forEach(item => setAccordionState(item, true, false));
+      saveAccordionState();
+    });
+
+    document.getElementById('collapseAllBtn').addEventListener('click', () => {
+      accordionItems.forEach(item => setAccordionState(item, false, false));
+      saveAccordionState();
+    });
+
+    window.addEventListener('resize', () => {
+      accordionItems.forEach(item => {
+        const content = item.querySelector('.accordion-content');
+        if (item.classList.contains('is-open')) content.style.height = 'auto';
+      });
+    });
+
+    restoreAccordionState();
+  </script>
+</body>
+</html>

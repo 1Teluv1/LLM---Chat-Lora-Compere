@@ -1,0 +1,31 @@
+.cache/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build/runtime outputs
+frontend/.next/
+frontend/out/
+dist/
+build/
+*.log
+
+# Local artifacts and model outputs
+artifacts/
+
+# OS/editor
+.DS_Store
+Thumbs.db

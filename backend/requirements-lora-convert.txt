@@ -1,0 +1,8 @@
+# LoRA PEFT(safetensors) → GGUF 변환 시 필요 (llama.cpp convert_lora_to_gguf.py)
+# 설치: pip install -r backend/requirements-lora-convert.txt
+numpy>=1.26.0
+torch
+transformers>=4.38.0
+safetensors>=0.4.0
+huggingface_hub>=0.20.0
+peft>=0.11.0

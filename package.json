@@ -1,0 +1,18 @@
+{
+  "name": "llm-lora-compere",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "stop:ports": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/stop-ports.ps1",
+    "start": "npm run stop:ports && concurrently -k -n backend,frontend \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": ".\\.venv\\Scripts\\python.exe -m uvicorn --app-dir backend app.main:app --host 0.0.0.0 --port 8001",
+    "start:frontend": "npm --prefix frontend run build && npm --prefix frontend start",
+    "build": "npm --prefix frontend run build",
+    "convert:lora": "cd backend && ..\\.venv\\Scripts\\python.exe -m app.convert_lora_cli",
+    "merge:peft-to-gguf": "cd backend && ..\\.venv\\Scripts\\python.exe -m app.merge_peft_cli",
+    "install:llama-cuda": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-llama-cpp-cuda.ps1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
