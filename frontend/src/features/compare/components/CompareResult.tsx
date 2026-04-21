@@ -6,9 +6,28 @@ type Props = {
   baseText: string;
   loraText: string;
   result: CompareResponse | null;
+  loading: boolean;
+  phase: string | null;
 };
 
-export function CompareResult({ baseText, loraText, result }: Props) {
+function resolveBaseStatus(loading: boolean, phase: string | null, hasResult: boolean): string {
+  if (loading && phase?.toLowerCase().includes("base")) return "Streaming";
+  if (loading && phase?.toLowerCase().includes("lora")) return "Ready";
+  if (hasResult) return "Ready";
+  return "Idle";
+}
+
+function resolveLoraStatus(loading: boolean, phase: string | null, hasResult: boolean): string {
+  if (loading && phase?.toLowerCase().includes("lora")) return "Streaming";
+  if (hasResult) return "Ready";
+  return "Idle";
+}
+
+export function CompareResult({ baseText, loraText, result, loading, phase }: Props) {
+  const hasResult = !!result;
+  const baseStatus = resolveBaseStatus(loading, phase, hasResult);
+  const loraStatus = resolveLoraStatus(loading, phase, hasResult);
+
   return (
     <section className="results">
       <article className="output-card">
@@ -16,7 +35,7 @@ export function CompareResult({ baseText, loraText, result }: Props) {
           <div className="output-title">Base Output</div>
           <div className="status">
             <span className="badge-dot" />
-            Ready
+            {baseStatus}
           </div>
         </div>
         <div className="stream-box">
@@ -32,7 +51,7 @@ export function CompareResult({ baseText, loraText, result }: Props) {
           <div className="output-title">LoRA Output</div>
           <div className="status">
             <span className="badge-dot" />
-            Streaming
+            {loraStatus}
           </div>
         </div>
         <div className="stream-box">

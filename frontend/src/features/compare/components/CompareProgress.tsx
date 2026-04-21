@@ -37,6 +37,19 @@ type Props = {
   }>;
 };
 
+const CHART_COLORS = {
+  cpu: "#f5c84c",
+  ram: "#8f949d",
+  vramUsed: "#f5c84c",
+  vramTotal: "#6b7280",
+  latency: "#f5c84c",
+  axis: "#9ca3af",
+  grid: "#2f333a",
+  tooltipBg: "#111317",
+  tooltipBorder: "#f5c84c",
+  tooltipText: "#f3f4f6"
+} as const;
+
 function toPercent(value?: number | null): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return `${value.toFixed(1)}%`;
@@ -45,6 +58,11 @@ function toPercent(value?: number | null): string {
 function toGiB(value?: number | null): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GiB`;
+}
+
+function formatOneDecimal(value: unknown): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+  return value.toFixed(1);
 }
 
 export function CompareProgress({
@@ -102,13 +120,23 @@ export function CompareProgress({
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={metricHistory}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" minTickGap={24} />
-                <YAxis domain={[0, 100]} />
-                <Tooltip />
+                <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
+                <XAxis dataKey="label" minTickGap={24} tick={{ fill: CHART_COLORS.axis }} />
+                <YAxis domain={[0, 100]} tick={{ fill: CHART_COLORS.axis }} />
+                <Tooltip
+                  formatter={(value) => `${formatOneDecimal(value)}%`}
+                  contentStyle={{
+                    backgroundColor: CHART_COLORS.tooltipBg,
+                    border: `1px solid ${CHART_COLORS.tooltipBorder}`,
+                    borderRadius: 10,
+                    color: CHART_COLORS.tooltipText
+                  }}
+                  labelStyle={{ color: CHART_COLORS.tooltipText }}
+                  itemStyle={{ color: CHART_COLORS.tooltipText }}
+                />
                 <Legend />
-                <Line type="monotone" dataKey="cpuPercent" name="CPU %" stroke="#f59e0b" dot={false} />
-                <Line type="monotone" dataKey="ramPercent" name="RAM %" stroke="#9ca3af" dot={false} />
+                <Line type="monotone" dataKey="cpuPercent" name="CPU %" stroke={CHART_COLORS.cpu} dot={false} />
+                <Line type="monotone" dataKey="ramPercent" name="RAM %" stroke={CHART_COLORS.ram} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -124,23 +152,33 @@ export function CompareProgress({
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={metricHistory}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" minTickGap={24} />
-                  <YAxis />
-                  <Tooltip />
+                  <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
+                  <XAxis dataKey="label" minTickGap={24} tick={{ fill: CHART_COLORS.axis }} />
+                  <YAxis tick={{ fill: CHART_COLORS.axis }} />
+                  <Tooltip
+                    formatter={(value) => `${formatOneDecimal(value)} GiB`}
+                    contentStyle={{
+                      backgroundColor: CHART_COLORS.tooltipBg,
+                      border: `1px solid ${CHART_COLORS.tooltipBorder}`,
+                      borderRadius: 10,
+                      color: CHART_COLORS.tooltipText
+                    }}
+                    labelStyle={{ color: CHART_COLORS.tooltipText }}
+                    itemStyle={{ color: CHART_COLORS.tooltipText }}
+                  />
                   <Legend />
                   <Line
                     type="monotone"
                     dataKey="vramUsedGiB"
                     name="VRAM Used GiB"
-                    stroke="#60a5fa"
+                    stroke={CHART_COLORS.vramUsed}
                     dot={false}
                   />
                   <Line
                     type="monotone"
                     dataKey="vramTotalGiB"
                     name="VRAM Total GiB"
-                    stroke="#1d4ed8"
+                    stroke={CHART_COLORS.vramTotal}
                     dot={false}
                   />
                 </LineChart>
@@ -174,11 +212,21 @@ export function CompareProgress({
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={latencyHistory}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="durationMs" name="Duration (ms)" fill="#fbbf24" />
+                <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fill: CHART_COLORS.axis }} />
+                <YAxis tick={{ fill: CHART_COLORS.axis }} />
+                <Tooltip
+                  formatter={(value) => `${formatOneDecimal(value)} ms`}
+                  contentStyle={{
+                    backgroundColor: CHART_COLORS.tooltipBg,
+                    border: `1px solid ${CHART_COLORS.tooltipBorder}`,
+                    borderRadius: 10,
+                    color: CHART_COLORS.tooltipText
+                  }}
+                  labelStyle={{ color: CHART_COLORS.tooltipText }}
+                  itemStyle={{ color: CHART_COLORS.tooltipText }}
+                />
+                <Bar dataKey="durationMs" name="Duration (ms)" fill={CHART_COLORS.latency} />
               </BarChart>
             </ResponsiveContainer>
           </div>

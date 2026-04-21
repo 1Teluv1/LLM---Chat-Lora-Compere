@@ -84,13 +84,14 @@ export default function HomePage() {
           </div>
 
           <h1>
-            LoRA 비교를 위한
+            정량적 LoRA 성능 검증을 위한
             <br />
-            <span className="headline-accent">심플 모던 대시보드</span>
+            <span className="headline-accent">Base vs LoRA 평가 대시보드</span>
           </h1>
           <p className="subtitle">
-            회색, 검은색, 노란색 중심의 대시보드 UI입니다. 실험 파라미터와 Base/LoRA
-            결과를 하나의 흐름에서 확인할 수 있도록 구조를 정리했습니다.
+            동일한 프롬프트와 샘플링 조건에서 Base 모델과 LoRA 적용 모델의 출력을
+            일관되게 비교하고, 로딩 상태·시스템 리소스·결과 지연시간을 한 화면에서
+            검증할 수 있도록 설계했습니다.
           </p>
         </div>
 
@@ -98,7 +99,7 @@ export default function HomePage() {
           <div className="toolbar">
             <div className="toolbar-left">
               <h2>실험 컨트롤</h2>
-              <p>필요한 정보만 펼쳐서 보고, 나머지는 접어서 더 간결하게 관리합니다.</p>
+              <p>실험 파라미터를 표준화해 재현 가능한 비교 시나리오를 빠르게 구성합니다.</p>
             </div>
             <div className="toolbar-actions">
               <button className="btn btn-secondary" type="button" onClick={expandAll}>
@@ -257,7 +258,13 @@ export default function HomePage() {
                         />
                       </section>
                     ) : null}
-                    <CompareResult baseText={baseText} loraText={loraText} result={result} />
+                    <CompareResult
+                      baseText={baseText}
+                      loraText={loraText}
+                      result={result}
+                      loading={loading}
+                      phase={phase}
+                    />
                   </div>
                 </div>
               ) : null}
