@@ -401,7 +401,7 @@ class InferenceService:
                 self._mark_error(f"LoRA 어댑터 파일을 찾을 수 없습니다: {compare_model_path}")
             return
 
-        n_ctx = int(os.getenv("LLAMA_N_CTX", "4096"))
+        n_ctx = int(os.getenv("LLAMA_N_CTX", "262144"))
         n_threads = int(os.getenv("LLAMA_N_THREADS", "8"))
         n_gpu_layers_req = int(os.getenv("LLAMA_N_GPU_LAYERS", "0"))
         # llama-cpp-python이 CPU 전용 빌드면 n_gpu_layers를 강제로 0으로 덮어씀(hang 방지).
@@ -603,7 +603,7 @@ class InferenceService:
             "comparison_mode": self._comparison_mode,
             "base_file_exists": base_p.is_file() if base_p else False,
             "lora_file_exists": lora_p.is_file() if lora_p else False,
-            "llama_n_ctx": int(os.getenv("LLAMA_N_CTX", "4096")),
+            "llama_n_ctx": int(os.getenv("LLAMA_N_CTX", "262144")),
             "llama_n_gpu_layers": int(os.getenv("LLAMA_N_GPU_LAYERS", "0")),
             "llama_n_threads": int(os.getenv("LLAMA_N_THREADS", "8")),
             "llama_use_mmap": _env_use_mmap(),
@@ -751,7 +751,7 @@ def peek_inference_environment() -> dict[str, Any]:
         "comparison_mode": "merged_gguf" if use_merged else "lora_adapter",
         "base_file_exists": base_p.is_file() if base_p else False,
         "lora_file_exists": lora_p.is_file() if lora_p else False,
-        "llama_n_ctx": int(os.getenv("LLAMA_N_CTX", "4096")),
+        "llama_n_ctx": int(os.getenv("LLAMA_N_CTX", "262144")),
         "llama_n_gpu_layers": int(os.getenv("LLAMA_N_GPU_LAYERS", "0")),
         "llama_n_threads": int(os.getenv("LLAMA_N_THREADS", "8")),
         "llama_use_mmap": _env_use_mmap(),

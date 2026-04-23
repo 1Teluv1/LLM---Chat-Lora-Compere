@@ -3,6 +3,8 @@ export const BACKEND_BASE_URL =
 
 export type CompareRequest = {
   prompt: string;
+  system_prompt?: string | null;
+  enable_thinking?: boolean;
   seed: number;
   top_k: number;
   top_p: number;
@@ -39,6 +41,29 @@ export type ArtifactOption = {
 export type ArtifactOptionsResponse = {
   base: ArtifactOption[];
   lora: ArtifactOption[];
+};
+
+export type ArtifactDownloadRequest = {
+  repo_id: string;
+  target_type: "base" | "lora";
+  filename?: string | null;
+  allow_patterns?: string[] | null;
+  output_subdir?: string | null;
+  repo_type?: "model" | "dataset" | "space";
+};
+
+export type ArtifactDownloadResponse = {
+  success: boolean;
+  target_type: "base" | "lora";
+  repo_id: string;
+  resolved_path: string;
+  detected_files: {
+    base_gguf?: string | null;
+    adapter_model_safetensors?: string | null;
+    adapter_config_json?: string | null;
+    adapter_model_gguf?: string | null;
+  };
+  warnings: string[];
 };
 
 function formatHttpError(status: number, body: string): string {
@@ -84,6 +109,21 @@ export async function fetchArtifactOptions(): Promise<ArtifactOptionsResponse> {
     throw new Error(message || "artifacts 목록을 불러오지 못했습니다.");
   }
   return (await response.json()) as ArtifactOptionsResponse;
+}
+
+export async function downloadArtifact(
+  payload: ArtifactDownloadRequest
+): Promise<ArtifactDownloadResponse> {
+  const response = await fetch(`${BACKEND_BASE_URL}/artifacts/download`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(formatHttpError(response.status, errorText));
+  }
+  return (await response.json()) as ArtifactDownloadResponse;
 }
 
 export type LoadingStage =

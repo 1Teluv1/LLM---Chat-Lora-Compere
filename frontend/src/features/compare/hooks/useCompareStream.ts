@@ -43,6 +43,7 @@ export function useCompareStream(modelContext: ModelContext) {
   const [loadingStatus, setLoadingStatus] = useState<LoadingStatus | null>(null);
   const [metricHistory, setMetricHistory] = useState<MetricPoint[]>([]);
   const [latencyHistory, setLatencyHistory] = useState<LatencyPoint[]>([]);
+  const [requestedMaxTokens, setRequestedMaxTokens] = useState<number | null>(null);
   const pollTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export function useCompareStream(modelContext: ModelContext) {
     setBaseText("");
     setLoraText("");
     setPhase(null);
+    setRequestedMaxTokens(payload.max_tokens ?? null);
     setLoadingStatus(null);
     setLatencyHistory([]);
     try {
@@ -103,6 +105,10 @@ export function useCompareStream(modelContext: ModelContext) {
         if (ev.type === "meta") {
           if (ev.status) setLoadingStatus(ev.status);
           if (ev.message) setPhase(ev.message);
+        } else if (ev.type === "phase") {
+          if (ev.event === "start") {
+            setPhase(ev.phase === "base" ? "base" : "lora");
+          }
         } else if (ev.type === "delta") {
           if (ev.phase === "base") setBaseText((p) => p + ev.text);
           if (ev.phase === "lora") setLoraText((p) => p + ev.text);
@@ -137,6 +143,7 @@ export function useCompareStream(modelContext: ModelContext) {
     loadingStatus,
     metricHistory,
     latencyHistory,
+    requestedMaxTokens,
     submit
   };
 }

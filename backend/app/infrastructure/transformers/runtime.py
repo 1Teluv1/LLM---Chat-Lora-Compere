@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 from time import perf_counter
 from typing import Any, Iterator
@@ -200,10 +201,26 @@ class TransformersRuntime(InferenceRuntime):
             "ready": self.is_ready(),
         }
 
+    def _build_prompt(self, data: CompareInput) -> str:
+        system_prompt = (data.system_prompt or "").strip()
+        if not data.enable_thinking:
+            think_off = (
+                "Do not output chain-of-thought or <think> blocks. "
+                "Return only the final answer concisely."
+            )
+            system_prompt = f"{system_prompt}\n\n{think_off}".strip() if system_prompt else think_off
+        if not system_prompt:
+            return data.prompt
+        return f"System:\n{system_prompt}\n\nUser:\n{data.prompt}\n\nAssistant:\n"
+
+    def _strip_think_block(self, text: str) -> str:
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
     def _generate(self, pipe: Any, data: CompareInput) -> GenerationOutput:
         started = perf_counter()
+        prompt = self._build_prompt(data)
         outputs = pipe(
-            data.prompt,
+            prompt,
             do_sample=True,
             max_new_tokens=data.options.max_tokens,
             temperature=data.options.temperature,
@@ -212,8 +229,10 @@ class TransformersRuntime(InferenceRuntime):
             num_return_sequences=1,
         )
         text = outputs[0]["generated_text"]
-        if text.startswith(data.prompt):
-            text = text[len(data.prompt) :]
+        if text.startswith(prompt):
+            text = text[len(prompt) :]
+        if not data.enable_thinking:
+            text = self._strip_think_block(text)
         return GenerationOutput(text=text, duration_ms=int((perf_counter() - started) * 1000))
 
     def generate_base(self, data: CompareInput) -> GenerationOutput:

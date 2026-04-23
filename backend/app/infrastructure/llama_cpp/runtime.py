@@ -85,7 +85,7 @@ class LlamaCppRuntime(InferenceRuntime):
             self._set_stage("error", self._err)
             return
 
-        n_ctx = int(os.getenv("LLAMA_N_CTX", "4096"))
+        n_ctx = int(os.getenv("LLAMA_N_CTX", "262144"))
         n_threads = int(os.getenv("LLAMA_N_THREADS", "8"))
         n_gpu_layers = int(os.getenv("LLAMA_N_GPU_LAYERS", "0"))
         use_mmap = env_flag("LLAMA_USE_MMAP", True)
@@ -261,10 +261,23 @@ class LlamaCppRuntime(InferenceRuntime):
             "ready": self.is_ready(),
         }
 
+    def _build_prompt(self, data: CompareInput) -> str:
+        system_prompt = (data.system_prompt or "").strip()
+        if not data.enable_thinking:
+            think_off = (
+                "Do not output chain-of-thought or <think> blocks. "
+                "Return only the final answer concisely."
+            )
+            system_prompt = f"{system_prompt}\n\n{think_off}".strip() if system_prompt else think_off
+        if not system_prompt:
+            return data.prompt
+        return f"System:\n{system_prompt}\n\nUser:\n{data.prompt}\n\nAssistant:\n"
+
     def _generate(self, llm: Any, data: CompareInput, active_loras: list[dict[str, Any]] | None = None) -> GenerationOutput:
         started = perf_counter()
+        prompt = self._build_prompt(data)
         kwargs: dict[str, Any] = {
-            "prompt": data.prompt,
+            "prompt": prompt,
             "max_tokens": data.options.max_tokens,
             "temperature": data.options.temperature,
             "top_k": data.options.top_k,
@@ -279,8 +292,9 @@ class LlamaCppRuntime(InferenceRuntime):
         return GenerationOutput(text=text, duration_ms=int((perf_counter() - started) * 1000))
 
     def _stream(self, llm: Any, data: CompareInput, active_loras: list[dict[str, Any]] | None = None) -> Iterator[str]:
+        prompt = self._build_prompt(data)
         kwargs: dict[str, Any] = {
-            "prompt": data.prompt,
+            "prompt": prompt,
             "max_tokens": data.options.max_tokens,
             "temperature": data.options.temperature,
             "top_k": data.options.top_k,

@@ -13,8 +13,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app.application.compare_service import CompareService
+from app.download_assets import download_artifact
 from app.domain.models import CompareInput, GenerationOptions
-from app.schemas import CompareRequest, CompareResponse, GenerationResult
+from app.schemas import (
+    ArtifactDownloadRequest,
+    ArtifactDownloadResponse,
+    CompareRequest,
+    CompareResponse,
+    GenerationResult,
+)
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -33,6 +40,8 @@ compare_service = CompareService()
 def _to_domain(req: CompareRequest) -> CompareInput:
     return CompareInput(
         prompt=req.prompt,
+        system_prompt=req.system_prompt,
+        enable_thinking=req.enable_thinking,
         runtime=req.runtime,
         base_model_id=req.base_model_id,
         lora_id=req.lora_id,
@@ -73,6 +82,38 @@ def debug_inference(runtime: str = "llama_cpp") -> dict:
 @app.get("/runtime/status")
 def runtime_status(runtime: str = "llama_cpp") -> dict:
     return compare_service.loading_status(runtime)
+
+
+@app.post("/artifacts/download", response_model=ArtifactDownloadResponse)
+def artifacts_download(request: ArtifactDownloadRequest) -> ArtifactDownloadResponse:
+    try:
+        payload = download_artifact(
+            target_type=request.target_type,
+            repo_id=request.repo_id,
+            filename=request.filename,
+            allow_patterns=request.allow_patterns,
+            output_subdir=request.output_subdir,
+            repo_type=request.repo_type,
+        )
+        return ArtifactDownloadResponse(**payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        message = str(exc)
+        lower = message.lower()
+        if "401" in lower or "403" in lower or "token" in lower:
+            raise HTTPException(
+                status_code=401,
+                detail="Hugging Face 인증 실패: HF_TOKEN/HUGGING_FACE_HUB_TOKEN을 확인하세요.",
+            ) from exc
+        if "404" in lower or "not found" in lower:
+            raise HTTPException(status_code=404, detail="repo_id 또는 파일명을 찾을 수 없습니다.") from exc
+        if "429" in lower or "rate limit" in lower:
+            raise HTTPException(status_code=429, detail="Hugging Face 요청 제한에 걸렸습니다. 잠시 후 재시도하세요.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"Hugging Face 다운로드 실패: {message}",
+        ) from exc
 
 
 @app.post("/compare", response_model=CompareResponse)

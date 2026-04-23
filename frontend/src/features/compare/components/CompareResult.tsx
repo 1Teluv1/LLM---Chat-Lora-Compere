@@ -8,6 +8,7 @@ type Props = {
   result: CompareResponse | null;
   loading: boolean;
   phase: string | null;
+  requestedMaxTokens: number | null;
 };
 
 function resolveBaseStatus(loading: boolean, phase: string | null, hasResult: boolean): string {
@@ -23,10 +24,32 @@ function resolveLoraStatus(loading: boolean, phase: string | null, hasResult: bo
   return "Idle";
 }
 
-export function CompareResult({ baseText, loraText, result, loading, phase }: Props) {
+export function CompareResult({
+  baseText,
+  loraText,
+  result,
+  loading,
+  phase,
+  requestedMaxTokens
+}: Props) {
+  function estimateTokens(text: string): number {
+    if (!text.trim()) return 0;
+    return Math.max(1, Math.round(text.length / 4));
+  }
+
+  function buildTokenSummary(text: string): string {
+    const used = estimateTokens(text);
+    const max = result?.params.max_tokens ?? requestedMaxTokens;
+    if (!max || max <= 0) return `~${used} tok`;
+    const ratio = Math.min(100, (used / max) * 100);
+    return `~${used}/${max} tok (${ratio.toFixed(1)}%)`;
+  }
+
   const hasResult = !!result;
   const baseStatus = resolveBaseStatus(loading, phase, hasResult);
   const loraStatus = resolveLoraStatus(loading, phase, hasResult);
+  const baseRenderedText = result?.base.text ?? baseText;
+  const loraRenderedText = result?.lora.text ?? loraText;
 
   return (
     <section className="results">
@@ -39,11 +62,13 @@ export function CompareResult({ baseText, loraText, result, loading, phase }: Pr
           </div>
         </div>
         <div className="stream-box">
-          <pre>{result?.base.text ?? baseText}</pre>
+          <pre>{baseRenderedText}</pre>
         </div>
         <div className="footer-note">
           <span>Model: Base</span>
-          <span>{result ? `${result.base.duration_ms}ms` : "Latency · Tokens/sec · Total tokens"}</span>
+          <span>
+            {result ? `${result.base.duration_ms}ms · ${buildTokenSummary(baseRenderedText)}` : buildTokenSummary(baseRenderedText)}
+          </span>
         </div>
       </article>
       <article className="output-card">
@@ -55,11 +80,13 @@ export function CompareResult({ baseText, loraText, result, loading, phase }: Pr
           </div>
         </div>
         <div className="stream-box">
-          <pre>{result?.lora.text ?? loraText}</pre>
+          <pre>{loraRenderedText}</pre>
         </div>
         <div className="footer-note">
           <span>Adapter: LoRA</span>
-          <span>{result ? `${result.lora.duration_ms}ms` : "Diff View · Logprob · Sampling trace"}</span>
+          <span>
+            {result ? `${result.lora.duration_ms}ms · ${buildTokenSummary(loraRenderedText)}` : buildTokenSummary(loraRenderedText)}
+          </span>
         </div>
       </article>
     </section>

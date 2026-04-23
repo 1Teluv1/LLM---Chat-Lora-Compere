@@ -21,6 +21,8 @@ class GenerationOptions:
 @dataclass(slots=True)
 class CompareInput:
     prompt: str
+    system_prompt: str | None = None
+    enable_thinking: bool = False
     runtime: RuntimeType = "llama_cpp"
     base_model_id: str | None = None
     lora_id: str | None = None

@@ -136,6 +136,33 @@ npm run start
 
 - 런타임 로딩 상태 확인
 
+### `POST /artifacts/download`
+
+- Hugging Face에서 Base/LoRA 아티팩트를 다운로드
+- 요청 예시(Base GGUF):
+
+```json
+{
+  "repo_id": "unsloth/Qwen3.6-35B-A3B-GGUF",
+  "target_type": "base",
+  "filename": "Qwen3.6-35B-A3B-UD-Q3_K_XL.gguf",
+  "output_subdir": "qwen3"
+}
+```
+
+- 요청 예시(LoRA/PEFT):
+
+```json
+{
+  "repo_id": "org/my-lora-repo",
+  "target_type": "lora",
+  "allow_patterns": ["adapter_model.*", "adapter_config.json"],
+  "output_subdir": "my-lora"
+}
+```
+
+- 응답: `resolved_path`, `detected_files`, `warnings`
+
 ## 모델/LoRA 준비
 
 ### 다운로드 스크립트 사용
@@ -146,6 +173,13 @@ $env:HF_TOKEN="hf_xxx_replace_me"
 ```
 
 다운로드 후 실제 파일 경로를 `.env`의 `BASE_MODEL_PATH`, `LORA_ADAPTER_PATH`에 반영하세요.
+
+### UI에서 Hugging Face 다운로드
+
+1. 화면의 `HF Base Repo ID` / `HF Base Filename` 또는 `HF LoRA Repo ID` 입력
+2. `HF Base 다운로드` 또는 `HF LoRA 다운로드` 실행
+3. 완료되면 Base/LoRA 선택 드롭다운이 자동 갱신되고, 방금 내려받은 항목이 자동 선택됨
+4. 이후 `Base vs LoRA 비교 실행`
 
 ### LoRA 변환
 

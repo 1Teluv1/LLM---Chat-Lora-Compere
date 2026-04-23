@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { CompareForm } from "@/features/compare/components/CompareForm";
+import { ArtifactDownloadModal } from "@/features/compare/components/ArtifactDownloadModal";
 import { CompareProgress } from "@/features/compare/components/CompareProgress";
 import { CompareResult } from "@/features/compare/components/CompareResult";
 import { useCompareStream } from "@/features/compare/hooks/useCompareStream";
@@ -29,9 +30,12 @@ export default function HomePage() {
     loadingStatus,
     metricHistory,
     latencyHistory,
+    requestedMaxTokens,
     submit
   } = useCompareStream(modelContext);
   const [openState, setOpenState] = useState<boolean[]>([true, false, false, true]);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [artifactsRefreshKey, setArtifactsRefreshKey] = useState(0);
 
   useEffect(() => {
     try {
@@ -102,6 +106,13 @@ export default function HomePage() {
               <p>실험 파라미터를 표준화해 재현 가능한 비교 시나리오를 빠르게 구성합니다.</p>
             </div>
             <div className="toolbar-actions">
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={() => setDownloadModalOpen(true)}
+              >
+                모델 다운로드
+              </button>
               <button className="btn btn-secondary" type="button" onClick={expandAll}>
                 모두 열기
               </button>
@@ -137,6 +148,7 @@ export default function HomePage() {
                     <CompareForm
                       loading={loading}
                       onSubmit={submit}
+                      artifactsRefreshKey={artifactsRefreshKey}
                       onModelContextChange={setModelContext}
                     />
                   </div>
@@ -170,6 +182,7 @@ export default function HomePage() {
                       loading={loading}
                       onSubmit={submit}
                       advancedOnly
+                      artifactsRefreshKey={artifactsRefreshKey}
                       onModelContextChange={setModelContext}
                     />
                   </div>
@@ -264,6 +277,7 @@ export default function HomePage() {
                       result={result}
                       loading={loading}
                       phase={phase}
+                      requestedMaxTokens={requestedMaxTokens}
                     />
                   </div>
                 </div>
@@ -278,6 +292,11 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      <ArtifactDownloadModal
+        open={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
+        onDownloaded={() => setArtifactsRefreshKey((prev) => prev + 1)}
+      />
     </main>
   );
 }

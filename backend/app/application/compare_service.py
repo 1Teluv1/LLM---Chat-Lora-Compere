@@ -38,6 +38,8 @@ class CompareService:
         lora = runtime.generate_lora(data)
         params: dict[str, Any] = {
             "prompt": data.prompt,
+            "system_prompt": data.system_prompt,
+            "enable_thinking": data.enable_thinking,
             "seed": data.options.seed,
             "top_k": data.options.top_k,
             "top_p": data.options.top_p,
