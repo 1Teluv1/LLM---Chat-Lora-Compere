@@ -108,6 +108,15 @@ export function useCompareStream(modelContext: ModelContext) {
         } else if (ev.type === "phase") {
           if (ev.event === "start") {
             setPhase(ev.phase === "base" ? "base" : "lora");
+          } else if (ev.event === "end" && "inference" in ev && ev.inference) {
+            const inf = ev.inference;
+            const ttft =
+              inf.time_to_first_chunk_ms == null ? "—" : `${inf.time_to_first_chunk_ms}ms`;
+            setPhase(
+              ev.phase === "base"
+                ? `Base 완료 · ${inf.duration_ms}ms · ${inf.output_chars}자 · TTFT ${ttft} · 청크 ${inf.stream_chunks}`
+                : `LoRA 완료 · ${inf.duration_ms}ms · ${inf.output_chars}자 · TTFT ${ttft} · 청크 ${inf.stream_chunks}`
+            );
           }
         } else if (ev.type === "delta") {
           if (ev.phase === "base") setBaseText((p) => p + ev.text);
@@ -117,7 +126,8 @@ export function useCompareStream(modelContext: ModelContext) {
             base: ev.base,
             lora: ev.lora,
             params: ev.params,
-            debug: ev.debug
+            debug: ev.debug,
+            inference_log: ev.inference_log
           });
           setLatencyHistory([
             { name: "Base", durationMs: ev.base.duration_ms },

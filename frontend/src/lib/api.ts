@@ -1,6 +1,16 @@
 export const BACKEND_BASE_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8001";
 
+/** llama.cpp 로드 옵션(UI·API 공통). null/0 n_ctx 등은 백엔드가 .env로 채움. */
+export type LlamaLoadConfig = {
+  n_ctx: number | null;
+  n_threads: number;
+  n_gpu_layers: number;
+  n_batch: number | null;
+  use_mmap: boolean;
+  use_mlock: boolean;
+};
+
 export type CompareRequest = {
   prompt: string;
   system_prompt?: string | null;
@@ -15,12 +25,56 @@ export type CompareRequest = {
   lora_id?: string | null;
   lora_strategy?: "auto" | "adapter" | "merged";
   device_hint?: "auto" | "cpu" | "cuda";
+  llama_load?: LlamaLoadConfig | null;
+};
+
+/** 실제 생성 호출과 동일하게 만든 프롬프트 문자열 기준 토큰 수 (백엔드 런타임 토크나이저). */
+export type PromptTokenInfo = {
+  rendered_prompt_chars: number;
+  rendered_prompt_tokens?: number;
+  tokenizer_backend?: string;
+  tokenize_params?: string;
+  tokenizer_name_or_path?: string | null;
+  add_special_tokens?: boolean;
+  lora_tokenizer_name_or_path?: string | null;
+  rendered_prompt_tokens_lora_pipeline?: number;
+  note?: string;
+  error?: string;
+  lora_tokenizer_error?: string;
+};
+
+/** /compare, /compare/stream `done`에서 내려주는 비교·추론 요약(백엔드 inference_log). */
+export type InferenceLog = {
+  runtime?: string;
+  mode?: "sync" | "stream" | string;
+  run_total_ms: number;
+  finished_at_utc: string;
+  prompt?: PromptTokenInfo | null;
+  base: {
+    phase: string;
+    duration_ms: number;
+    output_chars: number;
+    output_lines: number;
+    stream_chunks: number;
+    time_to_first_chunk_ms: number | null;
+    max_tokens_requested: number;
+  };
+  lora: {
+    phase: string;
+    duration_ms: number;
+    output_chars: number;
+    output_lines: number;
+    stream_chunks: number;
+    time_to_first_chunk_ms: number | null;
+    max_tokens_requested: number;
+  };
 };
 
 export type CompareResponse = {
   base: { text: string; duration_ms: number };
   lora: { text: string; duration_ms: number };
   params: CompareRequest;
+  inference_log?: InferenceLog | null;
   debug?: {
     runtime_effective?: "llama_cpp" | "transformers" | string;
     comparison_mode?: "lora_adapter" | "merged_gguf" | string;
@@ -187,9 +241,20 @@ export type LoadingStatus = {
     n_gpu_layers_requested: number;
     n_gpu_layers_effective: number | null;
     gpu_forced_off: boolean;
+    load_kw_effective?: Record<string, unknown> | null;
+    load_kw_pending?: Record<string, unknown> | null;
   };
   error_reason: string | null;
 };
+
+export async function fetchLlamaDefaults(): Promise<LlamaLoadConfig> {
+  const response = await fetch(`${BACKEND_BASE_URL}/runtime/llama-defaults`, { cache: "no-store" });
+  if (!response.ok) {
+    const t = await response.text();
+    throw new Error(t || "llama 기본 설정을 불러오지 못했습니다.");
+  }
+  return (await response.json()) as LlamaLoadConfig;
+}
 
 export async function fetchRuntimeStatus(
   runtime: "llama_cpp" | "transformers"
@@ -220,6 +285,7 @@ export type StreamEvent =
       event: "start" | "end";
       duration_ms?: number;
       text?: string;
+      inference?: InferenceLog["base"] | InferenceLog["lora"];
     }
   | { type: "delta"; phase: "base" | "lora"; text: string }
   | {
@@ -227,6 +293,7 @@ export type StreamEvent =
       base: { text: string; duration_ms: number };
       lora: { text: string; duration_ms: number };
       params: CompareRequest;
+      inference_log?: InferenceLog | null;
       debug?: CompareResponse["debug"];
     }
   | {

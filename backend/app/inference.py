@@ -416,9 +416,9 @@ class InferenceService:
         else:
             self._gpu_forced_off = False
             n_gpu_layers = n_gpu_layers_req
-        # 기본값을 verbose=True로(진행 파악 위해). 명시적으로 꺼진 경우만 False.
+        # llama.cpp stderr(CUDA Graph 등) 스팸 방지: 기본은 끔. LLAMA_VERBOSE=1 로만 켬.
         verbose_env = os.getenv("LLAMA_VERBOSE", "").strip().lower()
-        verbose = verbose_env not in ("0", "false", "no", "off")
+        verbose = verbose_env in ("1", "true", "yes", "on")
         use_mmap = _env_use_mmap()
         use_mlock = _env_use_mlock()
 
@@ -659,6 +659,12 @@ class InferenceService:
         output = llm(**call_kwargs)
         text = output["choices"][0]["text"]
         elapsed_ms = int((perf_counter() - started_at) * 1000)
+        logger.info(
+            "[inference] llama(비스트림) 생성 완료 — %dms, 출력 %d자, max_tokens=%s",
+            elapsed_ms,
+            len(text),
+            kwargs.get("max_tokens"),
+        )
         return InferenceOutput(text=text, duration_ms=elapsed_ms)
 
     def iter_completion_chunks(self, llm: "Llama", prompt: str, **kwargs) -> Iterator[str]:
@@ -676,10 +682,20 @@ class InferenceService:
         if kwargs.get("active_loras") is not None:
             call_kwargs["active_loras"] = kwargs["active_loras"]
         stream = llm(**call_kwargs)
+        t_stream = perf_counter()
+        n_chunks = 0
         for part in stream:
             piece = part["choices"][0].get("text") or ""
             if piece:
+                n_chunks += 1
                 yield piece
+        stream_ms = int((perf_counter() - t_stream) * 1000)
+        logger.info(
+            "[inference] llama(스트림) 수집 완료 — %dms, 청크 %d, max_tokens=%s",
+            stream_ms,
+            n_chunks,
+            kwargs.get("max_tokens"),
+        )
 
     def stream_base_chunks(self, prompt: str, **kwargs) -> Iterator[str]:
         if self._base_llm is None:

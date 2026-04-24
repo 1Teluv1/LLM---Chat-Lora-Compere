@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 
 import { CompareForm } from "@/features/compare/components/CompareForm";
+import { LlamaEngineSettings } from "@/features/compare/components/LlamaEngineSettings";
 import { ArtifactDownloadModal } from "@/features/compare/components/ArtifactDownloadModal";
 import { CompareProgress } from "@/features/compare/components/CompareProgress";
 import { CompareResult } from "@/features/compare/components/CompareResult";
 import { useCompareStream } from "@/features/compare/hooks/useCompareStream";
+import type { LlamaLoadConfig } from "@/lib/api";
 
 const STORAGE_KEY = "lora_compare_accordion_state_v1";
 
@@ -33,7 +35,8 @@ export default function HomePage() {
     requestedMaxTokens,
     submit
   } = useCompareStream(modelContext);
-  const [openState, setOpenState] = useState<boolean[]>([true, false, false, true]);
+  const [openState, setOpenState] = useState<boolean[]>([true, false, false, false, true]);
+  const [llamaLoad, setLlamaLoad] = useState<LlamaLoadConfig | null>(null);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [artifactsRefreshKey, setArtifactsRefreshKey] = useState(0);
 
@@ -42,8 +45,11 @@ export default function HomePage() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
       const parsed = JSON.parse(saved) as boolean[];
-      if (Array.isArray(parsed) && parsed.length === 4) {
-        setOpenState(parsed.map(Boolean));
+      if (Array.isArray(parsed) && parsed.length >= 5) {
+        setOpenState(parsed.slice(0, 5).map(Boolean));
+      } else if (Array.isArray(parsed) && parsed.length === 4) {
+        const p = parsed.map(Boolean);
+        setOpenState([p[0], false, p[1], p[2], p[3]]);
       }
     } catch {
       /* ignore restore errors */
@@ -59,11 +65,11 @@ export default function HomePage() {
   }
 
   function expandAll() {
-    setOpenState([true, true, true, true]);
+    setOpenState([true, true, true, true, true]);
   }
 
   function collapseAll() {
-    setOpenState([false, false, false, false]);
+    setOpenState([false, false, false, false, false]);
   }
 
   const thinkFromSelection =
@@ -149,6 +155,7 @@ export default function HomePage() {
                       loading={loading}
                       onSubmit={submit}
                       artifactsRefreshKey={artifactsRefreshKey}
+                      llamaLoad={llamaLoad}
                       onModelContextChange={setModelContext}
                     />
                   </div>
@@ -164,6 +171,43 @@ export default function HomePage() {
                 onClick={() => toggle(1)}
               >
                 <div className="accordion-left">
+                  <div className="accordion-icon-wrap">🧩</div>
+                  <div>
+                    <div className="accordion-title">Llama.cpp 엔진 · 컨텍스트</div>
+                    <div className="accordion-desc">n_ctx, GPU 레이어, mmap 등 로드 설정을 한곳에서</div>
+                  </div>
+                </div>
+                <div className="accordion-meta">
+                  <span className="pill">llama_cpp</span>
+                  <span className="chevron">⌄</span>
+                </div>
+              </button>
+              {openState[1] ? (
+                <div className="accordion-content open">
+                  <div className="accordion-panel">
+                    <LlamaEngineSettings
+                      disabled={modelContext.runtime !== "llama_cpp"}
+                      value={llamaLoad}
+                      onChange={setLlamaLoad}
+                    />
+                    {modelContext.runtime !== "llama_cpp" ? (
+                      <p className="inference-log-hint inference-log-hint--tight">
+                        Runtime이 <strong>transformers</strong>이면 이 설정은 API에 포함되지 않습니다.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className={`accordion-item ${openState[2] ? "is-open" : ""}`}>
+              <button
+                className="accordion-trigger"
+                type="button"
+                aria-expanded={openState[2]}
+                onClick={() => toggle(2)}
+              >
+                <div className="accordion-left">
                   <div className="accordion-icon-wrap">⚙️</div>
                   <div>
                     <div className="accordion-title">고급 파라미터</div>
@@ -175,7 +219,7 @@ export default function HomePage() {
                   <span className="chevron">⌄</span>
                 </div>
               </button>
-              {openState[1] ? (
+              {openState[2] ? (
                 <div className="accordion-content open">
                   <div className="accordion-panel">
                     <CompareForm
@@ -190,12 +234,12 @@ export default function HomePage() {
               ) : null}
             </div>
 
-            <div className={`accordion-item ${openState[2] ? "is-open" : ""}`}>
+            <div className={`accordion-item ${openState[3] ? "is-open" : ""}`}>
               <button
                 className="accordion-trigger"
                 type="button"
-                aria-expanded={openState[2]}
-                onClick={() => toggle(2)}
+                aria-expanded={openState[3]}
+                onClick={() => toggle(3)}
               >
                 <div className="accordion-left">
                   <div className="accordion-icon-wrap">🚀</div>
@@ -211,7 +255,7 @@ export default function HomePage() {
                   <span className="chevron">⌄</span>
                 </div>
               </button>
-              {openState[2] ? (
+              {openState[3] ? (
                 <div className="accordion-content open">
                   <div className="accordion-panel">
                     <CompareProgress
@@ -227,12 +271,12 @@ export default function HomePage() {
               ) : null}
             </div>
 
-            <div className={`accordion-item ${openState[3] ? "is-open" : ""}`}>
+            <div className={`accordion-item ${openState[4] ? "is-open" : ""}`}>
               <button
                 className="accordion-trigger"
                 type="button"
-                aria-expanded={openState[3]}
-                onClick={() => toggle(3)}
+                aria-expanded={openState[4]}
+                onClick={() => toggle(4)}
               >
                 <div className="accordion-left">
                   <div className="accordion-icon-wrap">🧪</div>
@@ -246,7 +290,7 @@ export default function HomePage() {
                   <span className="chevron">⌄</span>
                 </div>
               </button>
-              {openState[3] ? (
+              {openState[4] ? (
                 <div className="accordion-content open">
                   <div className="accordion-panel">
                     {error ? (

@@ -99,6 +99,15 @@ export function CompareProgress({
           <p>Runtime: {runtime}</p>
           <p>Device: {loadingStatus?.device ?? "-"}</p>
           <p>Comparison: {loadingStatus?.comparison_mode ?? "-"}</p>
+          {loadingStatus?.llama_cpp?.load_kw_effective ? (
+            <p className="status-mono-line">
+              적용된 llama 로드: n_ctx={String(loadingStatus.llama_cpp.load_kw_effective.n_ctx ?? "—")},{" "}
+              n_gpu_layers={String(loadingStatus.llama_cpp.load_kw_effective.n_gpu_layers ?? "—")}
+              {loadingStatus.llama_cpp.load_kw_pending ? (
+                <span className="status-pending-hint"> (재로드 대기 중…)</span>
+              ) : null}
+            </p>
+          ) : null}
         </section>
 
         <section className="status-card">

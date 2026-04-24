@@ -2,7 +2,12 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { CompareRequest, fetchArtifactOptions, type ArtifactOption } from "@/lib/api";
+import {
+  CompareRequest,
+  fetchArtifactOptions,
+  type ArtifactOption,
+  type LlamaLoadConfig
+} from "@/lib/api";
 
 const SETTINGS_STORAGE_KEY = "lora_compare_form_settings_v1";
 
@@ -11,6 +16,7 @@ type Props = {
   onSubmit: (payload: CompareRequest) => Promise<void>;
   advancedOnly?: boolean;
   artifactsRefreshKey?: number;
+  llamaLoad?: LlamaLoadConfig | null;
   onModelContextChange?: (context: {
     runtime: "llama_cpp" | "transformers";
     baseModelId: string;
@@ -23,6 +29,7 @@ export function CompareForm({
   onSubmit,
   advancedOnly = false,
   artifactsRefreshKey = 0,
+  llamaLoad = null,
   onModelContextChange
 }: Props) {
   const [prompt, setPrompt] = useState("");
@@ -154,7 +161,8 @@ export function CompareForm({
       base_model_id: baseModelId || null,
       lora_id: loraId || null,
       lora_strategy: "auto",
-      device_hint: "auto"
+      device_hint: "auto",
+      llama_load: runtime === "llama_cpp" && llamaLoad ? llamaLoad : undefined
     });
   }
 

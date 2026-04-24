@@ -19,6 +19,18 @@ class GenerationOptions:
 
 
 @dataclass(slots=True)
+class LlamaLoadOverrides:
+    """UI/API에서 넘긴 llama.cpp 로드 옵션. 필드가 None이면 서버 환경 변수 기본값을 씁니다."""
+
+    n_ctx: int | None = None
+    n_threads: int | None = None
+    n_gpu_layers: int | None = None
+    n_batch: int | None = None
+    use_mmap: bool | None = None
+    use_mlock: bool | None = None
+
+
+@dataclass(slots=True)
 class CompareInput:
     prompt: str
     system_prompt: str | None = None
@@ -28,6 +40,7 @@ class CompareInput:
     lora_id: str | None = None
     lora_strategy: LoraStrategyType = "auto"
     device_hint: DeviceHintType = "auto"
+    llama_load: LlamaLoadOverrides | None = None
     options: GenerationOptions = field(
         default_factory=lambda: GenerationOptions(
             seed=42,

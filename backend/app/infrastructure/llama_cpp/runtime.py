@@ -10,7 +10,7 @@ from typing import Any, Iterator
 
 from app.config.settings import env_flag, optional_positive_int
 from app.domain.interfaces import InferenceRuntime
-from app.domain.models import CompareInput, GenerationOutput
+from app.domain.models import CompareInput, GenerationOutput, LlamaLoadOverrides
 from app.infrastructure.resolver import ModelResolver
 
 logger = logging.getLogger(__name__)
@@ -48,8 +48,15 @@ class LlamaCppRuntime(InferenceRuntime):
         self._resolved_base = ""
         self._resolved_compare = ""
         self._active_loras: list[dict[str, Any]] | None = None
-        self._load_started = False
         self._lock = threading.Lock()
+        self._loader_lock = threading.Lock()
+        self._loader_thread: threading.Thread | None = None
+        self._loaded_kw: dict[str, Any] | None = None
+        self._desired_kw: dict[str, Any] | None = None
+        self._desired_model_sel: dict[str, Any] | None = None
+        self._loaded_model_sel: dict[str, Any] | None = None
+        self._gpu_forced_off = False
+        self._effective_n_gpu_layers: int | None = None
 
     def runtime_name(self) -> str:
         return "llama_cpp"
@@ -59,58 +66,136 @@ class LlamaCppRuntime(InferenceRuntime):
             self._stage = stage
             self._message = message
 
-    def start_loading_async(self) -> None:
-        with self._lock:
-            if self._load_started:
-                return
-            self._load_started = True
-        threading.Thread(target=self._load_models, daemon=True, name="llama-runtime-loader").start()
-
-    def _load_models(self) -> None:
-        self._set_stage("resolving", "llama.cpp 모델 경로 확인 중")
-        if Llama is None:
-            self._err = "llama_cpp 모듈 import 실패"
-            self._set_stage("error", self._err)
-            return
-        resolved = self._resolver.resolve_for_llama()
-        self._resolved_base = resolved["base_model_path"]
-        self._resolved_compare = resolved["compare_model_path"]
-        self._comparison_mode = resolved["comparison_mode"]
-        if not self._resolved_base or not Path(self._resolved_base).is_file():
-            self._err = f"베이스 모델 파일 없음: {self._resolved_base}"
-            self._set_stage("error", self._err)
-            return
-        if not self._resolved_compare or not Path(self._resolved_compare).is_file():
-            self._err = f"비교 모델 파일 없음: {self._resolved_compare}"
-            self._set_stage("error", self._err)
-            return
-
-        n_ctx = int(os.getenv("LLAMA_N_CTX", "262144"))
-        n_threads = int(os.getenv("LLAMA_N_THREADS", "8"))
-        n_gpu_layers = int(os.getenv("LLAMA_N_GPU_LAYERS", "0"))
-        use_mmap = env_flag("LLAMA_USE_MMAP", True)
-        use_mlock = env_flag("LLAMA_USE_MLOCK", False)
-        verbose = env_flag("LLAMA_VERBOSE", True)
-        kw = {
+    def _resolve_llama_kw(self, overrides: LlamaLoadOverrides | None) -> dict[str, Any]:
+        o = overrides
+        if o is None or o.n_ctx is None or o.n_ctx == 0:
+            n_ctx = int(os.getenv("LLAMA_N_CTX", "8192"))
+        else:
+            n_ctx = int(o.n_ctx)
+        n_ctx = max(512, min(262144, n_ctx))
+        n_threads = int(os.getenv("LLAMA_N_THREADS", "8")) if o is None or o.n_threads is None else o.n_threads
+        n_threads = max(1, min(256, n_threads))
+        n_gpu_layers_req = (
+            int(os.getenv("LLAMA_N_GPU_LAYERS", "0")) if o is None or o.n_gpu_layers is None else o.n_gpu_layers
+        )
+        if n_gpu_layers_req != 0 and not LLAMA_SUPPORTS_GPU:
+            self._gpu_forced_off = True
+            n_gpu_layers = 0
+        else:
+            self._gpu_forced_off = False
+            n_gpu_layers = n_gpu_layers_req
+        self._effective_n_gpu_layers = n_gpu_layers
+        use_mmap = env_flag("LLAMA_USE_MMAP", True) if o is None or o.use_mmap is None else o.use_mmap
+        use_mlock = env_flag("LLAMA_USE_MLOCK", False) if o is None or o.use_mlock is None else o.use_mlock
+        verbose = env_flag("LLAMA_VERBOSE", False)
+        n_batch: int | None = optional_positive_int("LLAMA_N_BATCH")
+        if o is not None and o.n_batch is not None:
+            n_batch = max(32, min(65536, o.n_batch))
+        return {
             "n_ctx": n_ctx,
             "n_threads": n_threads,
             "n_gpu_layers": n_gpu_layers,
             "use_mmap": use_mmap,
             "use_mlock": use_mlock,
             "verbose": verbose,
+            "n_batch": n_batch,
         }
-        n_batch = optional_positive_int("LLAMA_N_BATCH")
-        if n_batch:
-            kw["n_batch"] = n_batch
+
+    @staticmethod
+    def _llama_ctor_kw(load_kw: dict[str, Any]) -> dict[str, Any]:
+        ctor: dict[str, Any] = {k: v for k, v in load_kw.items() if k != "n_batch"}
+        nb = load_kw.get("n_batch")
+        if nb is not None:
+            ctor["n_batch"] = nb
+        return ctor
+
+    def start_loading_async(self, data: CompareInput | None = None) -> None:
+        overrides = data.llama_load if data else None
+        kw = self._resolve_llama_kw(overrides)
+        model_sel = {
+            "base_model_id": data.base_model_id if data else None,
+            "lora_id": data.lora_id if data else None,
+            "lora_strategy": data.lora_strategy if data else "auto",
+        }
+        with self._loader_lock:
+            self._desired_kw = kw
+            self._desired_model_sel = model_sel
+            if self._loader_thread is None or not self._loader_thread.is_alive():
+                self._loader_thread = threading.Thread(
+                    target=self._loader_main,
+                    daemon=True,
+                    name="llama-runtime-loader",
+                )
+                self._loader_thread.start()
+
+    def _loader_main(self) -> None:
+        while True:
+            with self._loader_lock:
+                target = dict(self._desired_kw) if self._desired_kw else self._resolve_llama_kw(None)
+                target_model_sel = dict(self._desired_model_sel) if self._desired_model_sel else {
+                    "base_model_id": None,
+                    "lora_id": None,
+                    "lora_strategy": "auto",
+                }
+            try:
+                self._set_stage("resolving", "llama.cpp 로드 설정 적용 중…")
+                self._load_models_impl(target, target_model_sel)
+                with self._loader_lock:
+                    self._loaded_kw = dict(target)
+                    self._loaded_model_sel = dict(target_model_sel)
+                    pending = dict(self._desired_kw) if self._desired_kw else {}
+                    pending_model_sel = (
+                        dict(self._desired_model_sel)
+                        if self._desired_model_sel
+                        else {"base_model_id": None, "lora_id": None, "lora_strategy": "auto"}
+                    )
+                    if pending == self._loaded_kw and pending_model_sel == self._loaded_model_sel:
+                        self._set_stage("ready", "모델 로드 완료")
+                        return
+            except Exception as exc:
+                err = f"{type(exc).__name__}: {exc}"
+                self._err = err
+                self._base_llm = None
+                self._lora_llm = None
+                logger.warning("llama runtime load failed", exc_info=True)
+                self._set_stage("error", err)
+                return
+
+    def _load_models_impl(self, load_kw: dict[str, Any], model_sel: dict[str, Any]) -> None:
+        if Llama is None:
+            self._err = "llama_cpp 모듈 import 실패"
+            self._set_stage("error", self._err)
+            raise RuntimeError(self._err)
+        self._base_llm = None
+        self._lora_llm = None
+        resolved = self._resolver.resolve_for_llama(
+            strategy=str(model_sel.get("lora_strategy") or "auto"),
+            base_model_id=model_sel.get("base_model_id"),
+            lora_id=model_sel.get("lora_id"),
+        )
+        self._resolved_base = resolved["base_model_path"]
+        self._resolved_compare = resolved["compare_model_path"]
+        self._comparison_mode = resolved["comparison_mode"]
+        if not self._resolved_base or not Path(self._resolved_base).is_file():
+            self._err = f"베이스 모델 파일 없음: {self._resolved_base}"
+            self._set_stage("error", self._err)
+            raise RuntimeError(self._err)
+        if not self._resolved_compare or not Path(self._resolved_compare).is_file():
+            self._err = f"비교 모델 파일 없음: {self._resolved_compare}"
+            self._set_stage("error", self._err)
+            raise RuntimeError(self._err)
+
+        ctor = self._llama_ctor_kw(load_kw)
         try:
-            self._set_stage("loading_base", "베이스 모델 로딩 중")
-            self._base_llm = Llama(model_path=self._resolved_base, **kw)
+            ctx = ctor.get("n_ctx", "?")
+            self._set_stage("loading_base", f"베이스 모델 로딩 중 (n_ctx={ctx})")
+            self._base_llm = Llama(model_path=self._resolved_base, **ctor)
             self._set_stage("loading_lora", "비교 모델 로딩 중")
             if self._comparison_mode == "merged_gguf":
-                self._lora_llm = Llama(model_path=self._resolved_compare, **kw)
+                self._lora_llm = Llama(model_path=self._resolved_compare, **ctor)
                 self._active_loras = None
             else:
-                self._lora_llm = Llama(model_path=self._resolved_base, **kw)
+                self._lora_llm = Llama(model_path=self._resolved_base, **ctor)
                 self._lora_llm.load_lora("adapter", self._resolved_compare)
                 loaded = list(self._lora_llm.list_loras() or [])
                 if loaded:
@@ -118,21 +203,24 @@ class LlamaCppRuntime(InferenceRuntime):
                     adapter_obj = self._lora_llm._model._lora_registry[loaded[0]]
                     self._lora_llm._ctx.apply_loras([(adapter_obj, scale)])
                     self._active_loras = [{"name": loaded[0], "scale": scale}]
-            self._set_stage("ready", "모델 로드 완료")
-        except Exception as exc:
-            self._err = f"{type(exc).__name__}: {exc}"
+            self._err = ""
+        except Exception:
             self._base_llm = None
             self._lora_llm = None
-            logger.warning("llama runtime load failed", exc_info=True)
-            self._set_stage("error", self._err)
+            raise
 
     def is_ready(self) -> bool:
         return self._base_llm is not None and self._lora_llm is not None
 
     def _resolve_device(self) -> str:
+        ng = int(os.getenv("LLAMA_N_GPU_LAYERS", "0"))
+        if self._loaded_kw is not None:
+            ng = int(self._loaded_kw.get("n_gpu_layers", 0))
+        elif self._desired_kw is not None:
+            ng = int(self._desired_kw.get("n_gpu_layers", 0))
         if torch is not None and bool(torch.cuda.is_available()):
             return "cuda"
-        if int(os.getenv("LLAMA_N_GPU_LAYERS", "0")) > 0:
+        if ng != 0:
             return "cuda"
         return "cpu"
 
@@ -226,11 +314,21 @@ class LlamaCppRuntime(InferenceRuntime):
             "process": process_info,
             "gpu": gpu,
             "llama_cpp": {
-                "version": None,
+                "version": getattr(_llama_cpp_module, "__version__", None) if Llama else None,
                 "supports_gpu_offload": bool(LLAMA_SUPPORTS_GPU),
-                "n_gpu_layers_requested": int(os.getenv("LLAMA_N_GPU_LAYERS", "0")),
+                "n_gpu_layers_requested": (
+                    int(self._loaded_kw["n_gpu_layers"])
+                    if self._loaded_kw is not None
+                    else int(os.getenv("LLAMA_N_GPU_LAYERS", "0"))
+                ),
                 "n_gpu_layers_effective": getattr(self, "_effective_n_gpu_layers", None),
                 "gpu_forced_off": getattr(self, "_gpu_forced_off", False),
+                "load_kw_effective": dict(self._loaded_kw) if self._loaded_kw else None,
+                "load_kw_pending": (
+                    dict(self._desired_kw)
+                    if self._desired_kw and self._loaded_kw != self._desired_kw
+                    else None
+                ),
             },
             "error_reason": self._err or None,
         }
@@ -272,6 +370,42 @@ class LlamaCppRuntime(InferenceRuntime):
         if not system_prompt:
             return data.prompt
         return f"System:\n{system_prompt}\n\nUser:\n{data.prompt}\n\nAssistant:\n"
+
+    def prompt_token_info(self, data: CompareInput) -> dict[str, Any]:
+        """GGUF에 포함된 llama.cpp 어휘로 `tokenize` (Base·LoRA 동일 베이스 가정)."""
+        if self._base_llm is None:
+            return {}
+        prompt = self._build_prompt(data)
+        llm = self._base_llm
+        blob = prompt.encode("utf-8")
+        token_param_sets: tuple[dict[str, Any], ...] = (
+            {"add_bos": True, "special": True},
+            {"add_bos": True, "special": False},
+            {"add_bos": True},
+            {},
+        )
+        ids: list[int] | None = None
+        used_params = ""
+        for kw in token_param_sets:
+            try:
+                ids = llm.tokenize(blob, **kw)
+                used_params = ",".join(f"{k}={v}" for k, v in kw.items()) if kw else "positional"
+                break
+            except TypeError:
+                continue
+        if ids is None:
+            return {
+                "rendered_prompt_chars": len(prompt),
+                "tokenizer_backend": "llama_cpp",
+                "error": "llama_cpp.tokenize 호환 시그니처를 찾지 못했습니다.",
+            }
+        return {
+            "rendered_prompt_chars": len(prompt),
+            "rendered_prompt_tokens": len(ids),
+            "tokenizer_backend": "llama_cpp",
+            "tokenize_params": used_params,
+            "note": "로드된 GGUF의 어휘로 계산. 생성 시 llama.cpp가 추가하는 특수 토큰과 1~2 토큰 차이 날 수 있음.",
+        }
 
     def _generate(self, llm: Any, data: CompareInput, active_loras: list[dict[str, Any]] | None = None) -> GenerationOutput:
         started = perf_counter()

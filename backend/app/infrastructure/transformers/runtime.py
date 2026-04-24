@@ -38,7 +38,7 @@ class TransformersRuntime(InferenceRuntime):
         self._stage = stage
         self._message = message
 
-    def start_loading_async(self) -> None:
+    def start_loading_async(self, data: CompareInput | None = None) -> None:
         if self._load_started:
             return
         self._load_started = True
@@ -212,6 +212,43 @@ class TransformersRuntime(InferenceRuntime):
         if not system_prompt:
             return data.prompt
         return f"System:\n{system_prompt}\n\nUser:\n{data.prompt}\n\nAssistant:\n"
+
+    def prompt_token_info(self, data: CompareInput) -> dict[str, Any]:
+        """`pipeline`에 연결된 Hugging Face 토크나이저로 프롬프트 인코딩 길이를 셉니다."""
+        if self._base_pipe is None:
+            return {}
+        prompt = self._build_prompt(data)
+        tok = self._base_pipe.tokenizer
+        try:
+            ids = tok.encode(prompt, add_special_tokens=True, truncation=False)
+        except Exception as exc:
+            return {
+                "rendered_prompt_chars": len(prompt),
+                "tokenizer_backend": "transformers",
+                "tokenizer_name_or_path": getattr(tok, "name_or_path", None),
+                "error": str(exc),
+            }
+        name = getattr(tok, "name_or_path", None)
+        out: dict[str, Any] = {
+            "rendered_prompt_chars": len(prompt),
+            "rendered_prompt_tokens": len(ids),
+            "tokenizer_backend": "transformers",
+            "tokenizer_name_or_path": name,
+            "add_special_tokens": True,
+        }
+        if self._lora_pipe is not None and self._lora_pipe is not self._base_pipe:
+            tok_l = self._lora_pipe.tokenizer
+            try:
+                ids_l = tok_l.encode(prompt, add_special_tokens=True, truncation=False)
+                out["lora_tokenizer_name_or_path"] = getattr(tok_l, "name_or_path", None)
+                if len(ids_l) != len(ids):
+                    out["rendered_prompt_tokens_lora_pipeline"] = len(ids_l)
+                    out["note"] = (
+                        "Base 파이프와 LoRA 파이프의 토크나이저가 달라 프롬프트 토큰 수가 다를 수 있습니다."
+                    )
+            except Exception as exc:
+                out["lora_tokenizer_error"] = str(exc)
+        return out
 
     def _strip_think_block(self, text: str) -> str:
         return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()

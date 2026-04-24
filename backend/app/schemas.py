@@ -4,6 +4,18 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class LlamaLoadConfig(BaseModel):
+    """llama.cpp 모델 로드 시 적용(n_ctx 등). 값이 있으면 .env 기본값을 덮어씁니다."""
+
+    # 0 또는 null: 서버 LLAMA_N_CTX(.env) 사용. 지정 시 512~262144로 클램프.
+    n_ctx: int | None = Field(default=None, ge=0, le=262144)
+    n_threads: int | None = Field(default=None, ge=1, le=256)
+    n_gpu_layers: int | None = Field(default=None, ge=-1, le=65536)
+    n_batch: int | None = Field(default=None, ge=32, le=65536)
+    use_mmap: bool | None = None
+    use_mlock: bool | None = None
+
+
 class CompareRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     system_prompt: str | None = Field(default=None)
@@ -18,6 +30,10 @@ class CompareRequest(BaseModel):
     lora_id: str | None = Field(default=None)
     lora_strategy: str = Field(default="auto")
     device_hint: str = Field(default="auto")
+    llama_load: LlamaLoadConfig | None = Field(
+        default=None,
+        description="llama_cpp 런타임 전용 로드 옵션. 바꾸면 모델을 다시 로드합니다.",
+    )
 
 
 class GenerationResult(BaseModel):
@@ -30,6 +46,7 @@ class CompareResponse(BaseModel):
     lora: GenerationResult
     params: CompareRequest
     debug: dict[str, Any] | None = None
+    inference_log: dict[str, Any] | None = None
 
 
 class ArtifactDownloadRequest(BaseModel):

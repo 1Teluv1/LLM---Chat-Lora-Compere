@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from app.domain.interfaces import InferenceRuntime
@@ -25,15 +26,29 @@ class CompareService:
     def __init__(self) -> None:
         self._registry = RuntimeRegistry()
 
+    def get_runtime(self, runtime_name: str) -> InferenceRuntime:
+        return self._registry.get(runtime_name)
+
     def select_runtime(self, runtime_name: str) -> InferenceRuntime:
-        runtime = self._registry.get(runtime_name)
-        runtime.start_loading_async()
-        return runtime
+        return self.get_runtime(runtime_name)
+
+    @staticmethod
+    def wait_runtime_ready(runtime: InferenceRuntime, timeout: float = 1200.0) -> None:
+        t0 = time.perf_counter()
+        while True:
+            if runtime.is_ready():
+                return
+            st = runtime.get_loading_status()
+            if st.get("stage") == "error":
+                raise RuntimeError(st.get("message") or st.get("error_reason") or "모델 로드 실패")
+            if time.perf_counter() - t0 > timeout:
+                raise TimeoutError(f"모델 로드 대기 시간 초과 ({timeout:.0f}s)")
+            time.sleep(0.25)
 
     def compare_once(self, data: CompareInput) -> CompareOutput:
-        runtime = self.select_runtime(data.runtime)
-        if not runtime.is_ready():
-            raise RuntimeError(str(runtime.error_detail()))
+        runtime = self.get_runtime(data.runtime)
+        runtime.start_loading_async(data)
+        self.wait_runtime_ready(runtime)
         base = runtime.generate_base(data)
         lora = runtime.generate_lora(data)
         params: dict[str, Any] = {
@@ -54,9 +69,9 @@ class CompareService:
         return CompareOutput(base=base, lora=lora, params=params, debug=runtime.comparison_debug())
 
     def loading_status(self, runtime_name: str) -> dict[str, Any]:
-        runtime = self.select_runtime(runtime_name)
+        runtime = self.get_runtime(runtime_name)
         return runtime.get_loading_status()
 
     def error_detail(self, runtime_name: str) -> dict[str, Any]:
-        runtime = self.select_runtime(runtime_name)
+        runtime = self.get_runtime(runtime_name)
         return runtime.error_detail()

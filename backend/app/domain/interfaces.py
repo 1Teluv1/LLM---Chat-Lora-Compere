@@ -12,7 +12,8 @@ class InferenceRuntime(ABC):
         pass
 
     @abstractmethod
-    def start_loading_async(self) -> None:
+    def start_loading_async(self, data: CompareInput | None = None) -> None:
+        """백그라운드 로드 시작. llama_cpp는 data.llama_load로 설정이 바뀌면 재로드합니다."""
         pass
 
     @abstractmethod
@@ -45,4 +46,9 @@ class InferenceRuntime(ABC):
 
     @abstractmethod
     def stream_lora_chunks(self, data: CompareInput) -> Iterator[str]:
+        pass
+
+    @abstractmethod
+    def prompt_token_info(self, data: CompareInput) -> dict[str, Any]:
+        """실제 생성 호출과 동일하게 렌더된 프롬프트의 문자 수·토큰 수(가능한 경우). 미지원이면 빈 dict."""
         pass
