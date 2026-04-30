@@ -114,10 +114,18 @@ class ModelResolver:
         *,
         base_model_id: str | None = None,
         lora_id: str | None = None,
+        run_mode: str = "both",
     ) -> dict[str, str]:
         base = self._resolve_base_from_id(base_model_id) or self._discover_base_gguf()
         base_raw = os.getenv("BASE_MODEL_PATH", "").strip()
         base_path = str(base.resolve()) if base else (str(Path(base_raw).resolve()) if base_raw else "")
+
+        if run_mode == "base_only":
+            return {
+                "base_model_path": base_path,
+                "compare_model_path": "",
+                "comparison_mode": "base_only",
+            }
 
         selected_compare, selected_mode = self._resolve_lora_from_id(lora_id, strategy)
         merged = self._discover_merged_gguf()

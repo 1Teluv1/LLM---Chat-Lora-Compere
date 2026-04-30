@@ -213,11 +213,38 @@ class TransformersRuntime(InferenceRuntime):
             return data.prompt
         return f"System:\n{system_prompt}\n\nUser:\n{data.prompt}\n\nAssistant:\n"
 
+    def _hf_chat_prompt(self, pipe: Any, data: CompareInput) -> str:
+        tok = pipe.tokenizer
+        messages: list[dict[str, str]] = []
+        sys_p = (data.system_prompt or "").strip()
+        if sys_p:
+            messages.append({"role": "system", "content": sys_p})
+        messages.append({"role": "user", "content": data.prompt})
+        apply = getattr(tok, "apply_chat_template", None)
+        if callable(apply):
+            try:
+                return str(
+                    apply(
+                        messages,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                        enable_thinking=data.enable_thinking,
+                    )
+                )
+            except TypeError:
+                try:
+                    return str(apply(messages, tokenize=False, add_generation_prompt=True))
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        return self._build_prompt(data)
+
     def prompt_token_info(self, data: CompareInput) -> dict[str, Any]:
         """`pipeline`에 연결된 Hugging Face 토크나이저로 프롬프트 인코딩 길이를 셉니다."""
         if self._base_pipe is None:
             return {}
-        prompt = self._build_prompt(data)
+        prompt = self._hf_chat_prompt(self._base_pipe, data)
         tok = self._base_pipe.tokenizer
         try:
             ids = tok.encode(prompt, add_special_tokens=True, truncation=False)
@@ -255,7 +282,7 @@ class TransformersRuntime(InferenceRuntime):
 
     def _generate(self, pipe: Any, data: CompareInput) -> GenerationOutput:
         started = perf_counter()
-        prompt = self._build_prompt(data)
+        prompt = self._hf_chat_prompt(pipe, data)
         outputs = pipe(
             prompt,
             do_sample=True,

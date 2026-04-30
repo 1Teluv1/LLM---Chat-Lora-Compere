@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 
 try:
     from llama_cpp import Llama
+    import llama_cpp.llama_chat_format as llama_chat_format
 except Exception:  # pragma: no cover
     Llama = None  # type: ignore[assignment]
+    llama_chat_format = None  # type: ignore[assignment]
 try:
     import llama_cpp as _llama_cpp_module  # type: ignore
     LLAMA_SUPPORTS_GPU = bool(_llama_cpp_module.llama_supports_gpu_offload())
@@ -116,6 +118,7 @@ class LlamaCppRuntime(InferenceRuntime):
             "base_model_id": data.base_model_id if data else None,
             "lora_id": data.lora_id if data else None,
             "lora_strategy": data.lora_strategy if data else "auto",
+            "run_mode": data.run_mode if data else "both",
         }
         with self._loader_lock:
             self._desired_kw = kw
@@ -136,6 +139,7 @@ class LlamaCppRuntime(InferenceRuntime):
                     "base_model_id": None,
                     "lora_id": None,
                     "lora_strategy": "auto",
+                    "run_mode": "both",
                 }
             try:
                 self._set_stage("resolving", "llama.cpp 로드 설정 적용 중…")
@@ -147,7 +151,12 @@ class LlamaCppRuntime(InferenceRuntime):
                     pending_model_sel = (
                         dict(self._desired_model_sel)
                         if self._desired_model_sel
-                        else {"base_model_id": None, "lora_id": None, "lora_strategy": "auto"}
+                        else {
+                            "base_model_id": None,
+                            "lora_id": None,
+                            "lora_strategy": "auto",
+                            "run_mode": "both",
+                        }
                     )
                     if pending == self._loaded_kw and pending_model_sel == self._loaded_model_sel:
                         self._set_stage("ready", "모델 로드 완료")
@@ -168,10 +177,12 @@ class LlamaCppRuntime(InferenceRuntime):
             raise RuntimeError(self._err)
         self._base_llm = None
         self._lora_llm = None
+        run_mode = str(model_sel.get("run_mode") or "both")
         resolved = self._resolver.resolve_for_llama(
             strategy=str(model_sel.get("lora_strategy") or "auto"),
             base_model_id=model_sel.get("base_model_id"),
             lora_id=model_sel.get("lora_id"),
+            run_mode=run_mode,
         )
         self._resolved_base = resolved["base_model_path"]
         self._resolved_compare = resolved["compare_model_path"]
@@ -180,16 +191,22 @@ class LlamaCppRuntime(InferenceRuntime):
             self._err = f"베이스 모델 파일 없음: {self._resolved_base}"
             self._set_stage("error", self._err)
             raise RuntimeError(self._err)
-        if not self._resolved_compare or not Path(self._resolved_compare).is_file():
-            self._err = f"비교 모델 파일 없음: {self._resolved_compare}"
-            self._set_stage("error", self._err)
-            raise RuntimeError(self._err)
+        if run_mode != "base_only":
+            if not self._resolved_compare or not Path(self._resolved_compare).is_file():
+                self._err = f"비교 모델 파일 없음: {self._resolved_compare}"
+                self._set_stage("error", self._err)
+                raise RuntimeError(self._err)
 
         ctor = self._llama_ctor_kw(load_kw)
         try:
             ctx = ctor.get("n_ctx", "?")
             self._set_stage("loading_base", f"베이스 모델 로딩 중 (n_ctx={ctx})")
             self._base_llm = Llama(model_path=self._resolved_base, **ctor)
+            if run_mode == "base_only":
+                self._lora_llm = None
+                self._active_loras = None
+                self._err = ""
+                return
             self._set_stage("loading_lora", "비교 모델 로딩 중")
             if self._comparison_mode == "merged_gguf":
                 self._lora_llm = Llama(model_path=self._resolved_compare, **ctor)
@@ -210,6 +227,13 @@ class LlamaCppRuntime(InferenceRuntime):
             raise
 
     def is_ready(self) -> bool:
+        mode = "both"
+        if self._loaded_model_sel is not None:
+            mode = str(self._loaded_model_sel.get("run_mode") or "both")
+        if mode == "base_only":
+            return self._base_llm is not None
+        if mode == "lora_only":
+            return self._lora_llm is not None
         return self._base_llm is not None and self._lora_llm is not None
 
     def _resolve_device(self) -> str:
@@ -360,6 +384,7 @@ class LlamaCppRuntime(InferenceRuntime):
         }
 
     def _build_prompt(self, data: CompareInput) -> str:
+        """레거시 completion 경로용(채팅 템플릿 미사용 폴백)."""
         system_prompt = (data.system_prompt or "").strip()
         if not data.enable_thinking:
             think_off = (
@@ -371,12 +396,137 @@ class LlamaCppRuntime(InferenceRuntime):
             return data.prompt
         return f"System:\n{system_prompt}\n\nUser:\n{data.prompt}\n\nAssistant:\n"
 
+    @staticmethod
+    def _thinking_template_kwargs(data: CompareInput) -> dict[str, Any]:
+        return {"enable_thinking": bool(data.enable_thinking)}
+
+    def _chat_messages(self, data: CompareInput) -> list[dict[str, str]]:
+        messages: list[dict[str, str]] = []
+        system_prompt = (data.system_prompt or "").strip()
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": data.prompt})
+        return messages
+
+    def _resolve_chat_handler(self, llm: Any) -> Any:
+        if llama_chat_format is None:
+            raise RuntimeError("llama_chat_format unavailable")
+        return (
+            llm.chat_handler
+            or llm._chat_handlers.get(llm.chat_format)
+            or llama_chat_format.get_chat_completion_handler(llm.chat_format)
+        )
+
+    def _gen_sampling_kwargs(self, data: CompareInput) -> dict[str, Any]:
+        return {
+            "temperature": data.options.temperature,
+            "top_k": data.options.top_k,
+            "top_p": data.options.top_p,
+            "seed": data.options.seed,
+            "max_tokens": data.options.max_tokens,
+        }
+
+    def _chat_handler_invoke(self, llm: Any, data: CompareInput, *, stream: bool) -> Any:
+        handler = self._resolve_chat_handler(llm)
+        messages = self._chat_messages(data)
+        if not messages:
+            raise RuntimeError("chat messages empty")
+        gen_kw = self._gen_sampling_kwargs(data)
+        think_kw = self._thinking_template_kwargs(data)
+        last_err: Exception | None = None
+        for extra in (think_kw, {}):
+            try:
+                return handler(llm=llm, messages=messages, stream=stream, **gen_kw, **extra)
+            except TypeError as exc:
+                last_err = exc
+                continue
+        if last_err:
+            raise last_err
+        raise RuntimeError("chat handler invoke failed")
+
+    @staticmethod
+    def _text_from_chat_response(resp: Any) -> str:
+        try:
+            choice = resp["choices"][0]
+            msg = choice.get("message") or {}
+            return str(msg.get("content") or "")
+        except (KeyError, TypeError, IndexError):
+            return ""
+
+    def _try_chat_generate(self, llm: Any, data: CompareInput) -> str | None:
+        if Llama is None or llama_chat_format is None:
+            return None
+        try:
+            resp = self._chat_handler_invoke(llm, data, stream=False)
+            return self._text_from_chat_response(resp)
+        except Exception:
+            return None
+
+    def _try_open_chat_stream(self, llm: Any, data: CompareInput) -> Iterator[str] | None:
+        if Llama is None or llama_chat_format is None:
+            return None
+        try:
+            stream_iter = self._chat_handler_invoke(llm, data, stream=True)
+        except Exception:
+            return None
+
+        def chunks() -> Iterator[str]:
+            for chunk in stream_iter:
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                piece = delta.get("content") or ""
+                if piece:
+                    yield piece
+
+        return chunks()
+
+    def _jinja_prompt_str(self, llm: Any, data: CompareInput) -> str | None:
+        if llama_chat_format is None or Llama is None:
+            return None
+        meta = getattr(llm, "metadata", {}) or {}
+        template = meta.get("tokenizer.chat_template")
+        if not template or not isinstance(template, str):
+            return None
+        try:
+            eos_id = int(llm.token_eos())
+            bos_id = int(llm.token_bos())
+            eos_t = llm._model.token_get_text(eos_id) if eos_id != -1 else ""
+            bos_t = llm._model.token_get_text(bos_id) if bos_id != -1 else ""
+            fmt = llama_chat_format.Jinja2ChatFormatter(
+                template=template,
+                eos_token=eos_t,
+                bos_token=bos_t,
+                stop_token_ids=[eos_id] if eos_id != -1 else [],
+            )
+            messages = self._chat_messages(data)
+            think_kw = self._thinking_template_kwargs(data)
+            for extra in (think_kw, {}):
+                try:
+                    result = fmt(messages=messages, **extra)
+                    return str(result.prompt)
+                except Exception:
+                    continue
+        except Exception:
+            return None
+        return None
+
     def prompt_token_info(self, data: CompareInput) -> dict[str, Any]:
         """GGUF에 포함된 llama.cpp 어휘로 `tokenize` (Base·LoRA 동일 베이스 가정)."""
         if self._base_llm is None:
             return {}
-        prompt = self._build_prompt(data)
         llm = self._base_llm
+        jinja_prompt = self._jinja_prompt_str(llm, data)
+        prompt = jinja_prompt or self._build_prompt(data)
+        note = (
+            "로드된 GGUF의 어휘로 계산. 생성 시 llama.cpp가 추가하는 특수 토큰과 1~2 토큰 차이 날 수 있음."
+        )
+        if jinja_prompt:
+            note = (
+                "GGUF chat_template(Jinja)로 렌더한 프롬프트 기준. "
+                "enable_thinking는 Qwen3 템플릿 분기에 반영됩니다."
+            )
         blob = prompt.encode("utf-8")
         token_param_sets: tuple[dict[str, Any], ...] = (
             {"add_bos": True, "special": True},
@@ -404,11 +554,14 @@ class LlamaCppRuntime(InferenceRuntime):
             "rendered_prompt_tokens": len(ids),
             "tokenizer_backend": "llama_cpp",
             "tokenize_params": used_params,
-            "note": "로드된 GGUF의 어휘로 계산. 생성 시 llama.cpp가 추가하는 특수 토큰과 1~2 토큰 차이 날 수 있음.",
+            "note": note,
         }
 
     def _generate(self, llm: Any, data: CompareInput, active_loras: list[dict[str, Any]] | None = None) -> GenerationOutput:
         started = perf_counter()
+        chat_text = self._try_chat_generate(llm, data)
+        if chat_text is not None:
+            return GenerationOutput(text=chat_text, duration_ms=int((perf_counter() - started) * 1000))
         prompt = self._build_prompt(data)
         kwargs: dict[str, Any] = {
             "prompt": prompt,
@@ -426,6 +579,10 @@ class LlamaCppRuntime(InferenceRuntime):
         return GenerationOutput(text=text, duration_ms=int((perf_counter() - started) * 1000))
 
     def _stream(self, llm: Any, data: CompareInput, active_loras: list[dict[str, Any]] | None = None) -> Iterator[str]:
+        chat_it = self._try_open_chat_stream(llm, data)
+        if chat_it is not None:
+            yield from chat_it
+            return
         prompt = self._build_prompt(data)
         kwargs: dict[str, Any] = {
             "prompt": prompt,

@@ -5,7 +5,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.main import app
+from app.main import _to_domain, app
+from app.schemas import CompareRequest
 
 
 client = TestClient(app)
@@ -23,3 +24,14 @@ def test_debug_runtime_has_python() -> None:
     body = response.json()
     assert "python" in body
     assert "runtime_default" in body
+
+
+def test_compare_request_run_mode_default() -> None:
+    r = CompareRequest(prompt="hello")
+    assert r.run_mode == "both"
+
+
+def test_to_domain_maps_run_mode() -> None:
+    r = CompareRequest(prompt="x", run_mode="lora_only")
+    d = _to_domain(r)
+    assert d.run_mode == "lora_only"

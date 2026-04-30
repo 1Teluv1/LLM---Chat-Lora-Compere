@@ -56,6 +56,7 @@ def _to_domain(req: CompareRequest) -> CompareInput:
         prompt=req.prompt,
         system_prompt=req.system_prompt,
         enable_thinking=req.enable_thinking,
+        run_mode=req.run_mode,
         runtime=req.runtime,
         base_model_id=req.base_model_id,
         lora_id=req.lora_id,
@@ -265,89 +266,111 @@ def compare_stream(request: CompareRequest):
         def worker() -> None:
             try:
                 max_tok = int(request.max_tokens)
+                run_mode = request.run_mode
                 prompt_info = runtime.prompt_token_info(data)
-                q.put(_sse_event({"type": "phase", "phase": "base", "event": "start"}))
-                t0 = time.perf_counter()
-                base_parts: list[str] = []
-                base_chunk_count = 0
-                t_base_first: float | None = None
-                for chunk in runtime.stream_base_chunks(data):
-                    if t_base_first is None:
-                        t_base_first = time.perf_counter()
-                    base_chunk_count += 1
-                    base_parts.append(chunk)
-                    q.put(_sse_event({"type": "delta", "phase": "base", "text": chunk}))
-                base_text = "".join(base_parts)
-                base_ms = int((time.perf_counter() - t0) * 1000)
-                base_inf = _phase_inference_summary(
-                    "base", base_ms, base_text, base_chunk_count, t0, t_base_first, max_tok
-                )
-                logger.info(
-                    "[inference] Base LLM 응답 완료 — %dms, 출력 %d자, 줄 %d, TTFT %s, 스트림 청크 %d, max_tokens=%d",
-                    base_ms,
-                    base_inf["output_chars"],
-                    base_inf["output_lines"],
-                    f"{base_inf['time_to_first_chunk_ms']}ms" if base_inf["time_to_first_chunk_ms"] is not None else "—",
-                    base_chunk_count,
-                    max_tok,
-                )
-                q.put(
-                    _sse_event(
-                        {
-                            "type": "phase",
-                            "phase": "base",
-                            "event": "end",
-                            "duration_ms": base_ms,
-                            "text": base_text,
-                            "inference": base_inf,
-                        }
+                if run_mode != "lora_only":
+                    q.put(_sse_event({"type": "phase", "phase": "base", "event": "start"}))
+                    t0 = time.perf_counter()
+                    base_parts: list[str] = []
+                    base_chunk_count = 0
+                    t_base_first: float | None = None
+                    for chunk in runtime.stream_base_chunks(data):
+                        if t_base_first is None:
+                            t_base_first = time.perf_counter()
+                        base_chunk_count += 1
+                        base_parts.append(chunk)
+                        q.put(_sse_event({"type": "delta", "phase": "base", "text": chunk}))
+                    base_text = "".join(base_parts)
+                    base_ms = int((time.perf_counter() - t0) * 1000)
+                    base_inf = _phase_inference_summary(
+                        "base", base_ms, base_text, base_chunk_count, t0, t_base_first, max_tok
                     )
-                )
+                    logger.info(
+                        "[inference] Base LLM 응답 완료 — %dms, 출력 %d자, 줄 %d, TTFT %s, 스트림 청크 %d, max_tokens=%d",
+                        base_ms,
+                        base_inf["output_chars"],
+                        base_inf["output_lines"],
+                        f"{base_inf['time_to_first_chunk_ms']}ms"
+                        if base_inf["time_to_first_chunk_ms"] is not None
+                        else "—",
+                        base_chunk_count,
+                        max_tok,
+                    )
+                    q.put(
+                        _sse_event(
+                            {
+                                "type": "phase",
+                                "phase": "base",
+                                "event": "end",
+                                "duration_ms": base_ms,
+                                "text": base_text,
+                                "inference": base_inf,
+                            }
+                        )
+                    )
+                else:
+                    t_skip = time.perf_counter()
+                    base_text = ""
+                    base_ms = 0
+                    base_inf = _phase_inference_summary(
+                        "base", 0, "", 0, t_skip, None, max_tok
+                    )
 
-                q.put(_sse_event({"type": "phase", "phase": "lora", "event": "start"}))
-                t1 = time.perf_counter()
-                lora_parts: list[str] = []
-                lora_chunk_count = 0
-                t_lora_first: float | None = None
-                for chunk in runtime.stream_lora_chunks(data):
-                    if t_lora_first is None:
-                        t_lora_first = time.perf_counter()
-                    lora_chunk_count += 1
-                    lora_parts.append(chunk)
-                    q.put(_sse_event({"type": "delta", "phase": "lora", "text": chunk}))
-                lora_text = "".join(lora_parts)
-                lora_ms = int((time.perf_counter() - t1) * 1000)
-                lora_inf = _phase_inference_summary(
-                    "lora", lora_ms, lora_text, lora_chunk_count, t1, t_lora_first, max_tok
-                )
-                logger.info(
-                    "[inference] LoRA LLM 응답 완료 — %dms, 출력 %d자, 줄 %d, TTFT %s, 스트림 청크 %d, max_tokens=%d",
-                    lora_ms,
-                    lora_inf["output_chars"],
-                    lora_inf["output_lines"],
-                    f"{lora_inf['time_to_first_chunk_ms']}ms" if lora_inf["time_to_first_chunk_ms"] is not None else "—",
-                    lora_chunk_count,
-                    max_tok,
-                )
-                q.put(
-                    _sse_event(
-                        {
-                            "type": "phase",
-                            "phase": "lora",
-                            "event": "end",
-                            "duration_ms": lora_ms,
-                            "text": lora_text,
-                            "inference": lora_inf,
-                        }
+                if run_mode != "base_only":
+                    q.put(_sse_event({"type": "phase", "phase": "lora", "event": "start"}))
+                    t1 = time.perf_counter()
+                    lora_parts: list[str] = []
+                    lora_chunk_count = 0
+                    t_lora_first: float | None = None
+                    for chunk in runtime.stream_lora_chunks(data):
+                        if t_lora_first is None:
+                            t_lora_first = time.perf_counter()
+                        lora_chunk_count += 1
+                        lora_parts.append(chunk)
+                        q.put(_sse_event({"type": "delta", "phase": "lora", "text": chunk}))
+                    lora_text = "".join(lora_parts)
+                    lora_ms = int((time.perf_counter() - t1) * 1000)
+                    lora_inf = _phase_inference_summary(
+                        "lora", lora_ms, lora_text, lora_chunk_count, t1, t_lora_first, max_tok
                     )
-                )
+                    logger.info(
+                        "[inference] LoRA LLM 응답 완료 — %dms, 출력 %d자, 줄 %d, TTFT %s, 스트림 청크 %d, max_tokens=%d",
+                        lora_ms,
+                        lora_inf["output_chars"],
+                        lora_inf["output_lines"],
+                        f"{lora_inf['time_to_first_chunk_ms']}ms"
+                        if lora_inf["time_to_first_chunk_ms"] is not None
+                        else "—",
+                        lora_chunk_count,
+                        max_tok,
+                    )
+                    q.put(
+                        _sse_event(
+                            {
+                                "type": "phase",
+                                "phase": "lora",
+                                "event": "end",
+                                "duration_ms": lora_ms,
+                                "text": lora_text,
+                                "inference": lora_inf,
+                            }
+                        )
+                    )
+                else:
+                    t_skip_l = time.perf_counter()
+                    lora_text = ""
+                    lora_ms = 0
+                    lora_inf = _phase_inference_summary(
+                        "lora", 0, "", 0, t_skip_l, None, max_tok
+                    )
 
                 inference_log = _run_inference_log(
                     request, base_inf, lora_inf, "stream", prompt_info if prompt_info else None
                 )
                 pt = (prompt_info or {}).get("rendered_prompt_tokens")
                 logger.info(
-                    "[inference] Base·LoRA 비교 스트리밍 전체 완료 — 총 %dms (Base %dms + LoRA %dms) | 프롬프트 토큰=%s | %s",
+                    "[inference] 스트리밍 완료 (mode=%s) — 총 %dms (Base %dms + LoRA %dms) | 프롬프트 토큰=%s | %s",
+                    run_mode,
                     inference_log["run_total_ms"],
                     base_ms,
                     lora_ms,
@@ -401,7 +424,12 @@ def compare_stream(request: CompareRequest):
                 break
             time.sleep(poll_interval)
 
-        yield _sse_event({"type": "meta", "event": "ready", "message": "로드 완료. Base 스트리밍 시작.", "status": runtime.get_loading_status()})
+        _ready_msg = (
+            "로드 완료. LoRA 스트리밍 시작."
+            if data.run_mode == "lora_only"
+            else "로드 완료. Base 스트리밍 시작."
+        )
+        yield _sse_event({"type": "meta", "event": "ready", "message": _ready_msg, "status": runtime.get_loading_status()})
         q = sse_blob_producer()
         keepalive_sec = float(os.getenv("SSE_KEEPALIVE_SEC", "12") or "12")
         while True:

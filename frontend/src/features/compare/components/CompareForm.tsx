@@ -6,7 +6,8 @@ import {
   CompareRequest,
   fetchArtifactOptions,
   type ArtifactOption,
-  type LlamaLoadConfig
+  type LlamaLoadConfig,
+  type RunMode
 } from "@/lib/api";
 
 const SETTINGS_STORAGE_KEY = "lora_compare_form_settings_v1";
@@ -40,6 +41,7 @@ export function CompareForm({
   const [temperatureInput, setTemperatureInput] = useState("0.7");
   const [maxTokensInput, setMaxTokensInput] = useState("512");
   const [enableThinking, setEnableThinking] = useState(false);
+  const [runMode, setRunMode] = useState<RunMode>("both");
   const [runtime, setRuntime] = useState<"llama_cpp" | "transformers">("llama_cpp");
   const [baseModelId, setBaseModelId] = useState("");
   const [loraId, setLoraId] = useState("");
@@ -70,6 +72,7 @@ export function CompareForm({
         temperature?: number;
         maxTokens?: number;
         enableThinking?: boolean;
+        runMode?: RunMode;
         runtime?: "llama_cpp" | "transformers";
         baseModelId?: string;
         loraId?: string;
@@ -82,6 +85,9 @@ export function CompareForm({
       if (typeof parsed.temperature === "number") setTemperatureInput(String(parsed.temperature));
       if (typeof parsed.maxTokens === "number") setMaxTokensInput(String(parsed.maxTokens));
       if (typeof parsed.enableThinking === "boolean") setEnableThinking(parsed.enableThinking);
+      if (parsed.runMode === "both" || parsed.runMode === "base_only" || parsed.runMode === "lora_only") {
+        setRunMode(parsed.runMode);
+      }
       if (parsed.runtime === "llama_cpp" || parsed.runtime === "transformers") setRuntime(parsed.runtime);
       if (typeof parsed.baseModelId === "string") setBaseModelId(parsed.baseModelId);
       if (typeof parsed.loraId === "string") setLoraId(parsed.loraId);
@@ -101,6 +107,7 @@ export function CompareForm({
       temperature: parseFloatOrDefault(temperatureInput, 0.7),
       maxTokens: parseIntOrDefault(maxTokensInput, 512),
       enableThinking,
+      runMode,
       runtime,
       baseModelId,
       loraId
@@ -116,6 +123,7 @@ export function CompareForm({
     temperatureInput,
     maxTokensInput,
     enableThinking,
+    runMode,
     runtime,
     baseModelId,
     loraId
@@ -152,6 +160,7 @@ export function CompareForm({
       prompt,
       system_prompt: systemPrompt.trim() || null,
       enable_thinking: enableThinking,
+      run_mode: runMode,
       seed: parseIntOrDefault(seedInput, 42),
       top_k: parseIntOrDefault(topKInput, 40),
       top_p: parseFloatOrDefault(topPInput, 0.9),
@@ -286,7 +295,7 @@ export function CompareForm({
       <div className="field col-2">
         <label htmlFor="enableThinking">
           <span>추론 표시(Think)</span>
-          <span className="hint">끄면 최종 답변 위주</span>
+          <span className="hint">Qwen3 템플릿·enable_thinking</span>
         </label>
         <select
           id="enableThinking"
@@ -295,6 +304,22 @@ export function CompareForm({
         >
           <option value="off">OFF</option>
           <option value="on">ON</option>
+        </select>
+      </div>
+
+      <div className="field col-2">
+        <label htmlFor="runMode">
+          <span>실행 범위</span>
+          <span className="hint">Base / LoRA 단독</span>
+        </label>
+        <select
+          id="runMode"
+          value={runMode}
+          onChange={(e) => setRunMode(e.target.value as RunMode)}
+        >
+          <option value="both">Base + LoRA</option>
+          <option value="base_only">베이스만</option>
+          <option value="lora_only">LoRA만 (베이스+어댑터)</option>
         </select>
       </div>
 

@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 from app.domain.interfaces import InferenceRuntime
-from app.domain.models import CompareInput, CompareOutput
+from app.domain.models import CompareInput, CompareOutput, GenerationOutput
 from app.infrastructure.llama_cpp.runtime import LlamaCppRuntime
 from app.infrastructure.resolver import ModelResolver
 from app.infrastructure.transformers.runtime import TransformersRuntime
@@ -49,12 +49,20 @@ class CompareService:
         runtime = self.get_runtime(data.runtime)
         runtime.start_loading_async(data)
         self.wait_runtime_ready(runtime)
-        base = runtime.generate_base(data)
-        lora = runtime.generate_lora(data)
+        if data.run_mode == "base_only":
+            base = runtime.generate_base(data)
+            lora = GenerationOutput(text="", duration_ms=0)
+        elif data.run_mode == "lora_only":
+            base = GenerationOutput(text="", duration_ms=0)
+            lora = runtime.generate_lora(data)
+        else:
+            base = runtime.generate_base(data)
+            lora = runtime.generate_lora(data)
         params: dict[str, Any] = {
             "prompt": data.prompt,
             "system_prompt": data.system_prompt,
             "enable_thinking": data.enable_thinking,
+            "run_mode": data.run_mode,
             "seed": data.options.seed,
             "top_k": data.options.top_k,
             "top_p": data.options.top_p,

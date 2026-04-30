@@ -7,6 +7,7 @@ from typing import Any, Literal
 RuntimeType = Literal["llama_cpp", "transformers"]
 LoraStrategyType = Literal["adapter", "merged", "auto"]
 DeviceHintType = Literal["auto", "cpu", "cuda"]
+RunModeType = Literal["both", "base_only", "lora_only"]
 
 
 @dataclass(slots=True)
@@ -35,6 +36,7 @@ class CompareInput:
     prompt: str
     system_prompt: str | None = None
     enable_thinking: bool = False
+    run_mode: RunModeType = "both"
     runtime: RuntimeType = "llama_cpp"
     base_model_id: str | None = None
     lora_id: str | None = None

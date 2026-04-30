@@ -20,6 +20,10 @@ class CompareRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     system_prompt: str | None = Field(default=None)
     enable_thinking: bool = Field(default=False)
+    run_mode: Literal["both", "base_only", "lora_only"] = Field(
+        default="both",
+        description="both: Base·LoRA 순차 실행, base_only: 베이스만, lora_only: LoRA(어댑터) 경로만",
+    )
     seed: int = Field(default=42)
     top_k: int = Field(default=40, ge=1)
     top_p: float = Field(default=0.9, ge=0.0, le=1.0)

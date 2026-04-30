@@ -1,6 +1,6 @@
 "use client";
 
-import { CompareResponse, type InferenceLog, type PromptTokenInfo } from "@/lib/api";
+import { CompareResponse, type InferenceLog, type PromptTokenInfo, type RunMode } from "@/lib/api";
 
 type Props = {
   baseText: string;
@@ -46,6 +46,7 @@ export function CompareResult({
   }
 
   const hasResult = !!result;
+  const runMode: RunMode = result?.params.run_mode ?? "both";
   const baseStatus = resolveBaseStatus(loading, phase, hasResult);
   const loraStatus = resolveLoraStatus(loading, phase, hasResult);
   const baseRenderedText = result?.base.text ?? baseText;
@@ -168,11 +169,11 @@ export function CompareResult({
           <div className="output-title">Base Output</div>
           <div className="status">
             <span className="badge-dot" />
-            {baseStatus}
+            {runMode === "lora_only" ? "실행 안 함" : baseStatus}
           </div>
         </div>
         <div className="stream-box">
-          <pre>{baseRenderedText}</pre>
+          <pre>{runMode === "lora_only" ? "(이 실행에서는 Base 추론을 건너뜀)" : baseRenderedText}</pre>
         </div>
         <div className="footer-note">
           <span>Model: Base</span>
@@ -186,11 +187,11 @@ export function CompareResult({
           <div className="output-title">LoRA Output</div>
           <div className="status">
             <span className="badge-dot" />
-            {loraStatus}
+            {runMode === "base_only" ? "실행 안 함" : loraStatus}
           </div>
         </div>
         <div className="stream-box">
-          <pre>{loraRenderedText}</pre>
+          <pre>{runMode === "base_only" ? "(이 실행에서는 LoRA 경로 추론을 건너뜀)" : loraRenderedText}</pre>
         </div>
         <div className="footer-note">
           <span>Adapter: LoRA</span>
@@ -229,9 +230,9 @@ export function CompareResult({
               <div className="inference-phase-block">
                 <h5 className="inference-phase-title">프롬프트 (렌더 후 · 추론 직전)</h5>
                 <p className="inference-log-hint inference-log-hint--tight">
-                  System/Think 끄기 문구 등이 붙은 <strong>실제 모델에 넣는 문자열</strong> 길이입니다.{" "}
-                  <code>llama_cpp</code>는 GGUF 어휘의 <code>tokenize</code>, <code>transformers</code>는 로드된{" "}
-                  <code>AutoTokenizer</code>로 셉니다.
+                  <code>llama_cpp</code>는 가능하면 GGUF <code>chat_template</code>(Jinja) 렌더 문자열,
+                  <code>transformers</code>는 <code>apply_chat_template(enable_thinking=…)</code> 기준입니다.{" "}
+                  Think OFF일 때만 구형 System/User 문자열에 끄기 문구가 붙을 수 있습니다.
                 </p>
                 <InferenceMetricGrid items={promptTokenRows(inf.prompt)} />
                 {inf.prompt.note ? <p className="inference-log-hint inference-log-hint--tight">{inf.prompt.note}</p> : null}

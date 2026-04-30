@@ -11,10 +11,13 @@ export type LlamaLoadConfig = {
   use_mlock: boolean;
 };
 
+export type RunMode = "both" | "base_only" | "lora_only";
+
 export type CompareRequest = {
   prompt: string;
   system_prompt?: string | null;
   enable_thinking?: boolean;
+  run_mode?: RunMode;
   seed: number;
   top_k: number;
   top_p: number;
